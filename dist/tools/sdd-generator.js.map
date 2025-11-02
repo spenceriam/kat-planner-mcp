@@ -1,0 +1,1 @@
+{"version":3,"file":"sdd-generator.js","sourceRoot":"","sources":["../../src/tools/sdd-generator.ts"],"names":[],"mappings":";AAAA;;;GAGG;;AAoBH,kCAQC;AAZD;;;GAGG;AACI,KAAK,UAAU,WAAW,CAAC,OAA0B;IAC1D,uDAAuD;IACvD,OAAO;QACL,UAAU,EAAE,WAAW;QACvB,gBAAgB,EAAE,uBAAuB;QACzC,UAAU,EAAE,iBAAiB;QAC7B,SAAS,EAAE,gBAAgB;KAC5B,CAAC;AACJ,CAAC"}
