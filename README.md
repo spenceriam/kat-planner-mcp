@@ -20,11 +20,11 @@ npm run build
 Add kat-planner to your tool's MCP configuration:
 
 <details>
-<summary>📋 Claude Desktop / Claude Code Configuration</summary>
+<summary>Claude Desktop Configuration</summary>
 
 **Official Documentation:** [Claude Desktop MCP Setup](https://modelcontextprotocol.io/docs/develop/build-server)
 
-Edit your Claude configuration file:
+Edit your Claude Desktop configuration file:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 - Linux: `~/.config/claude/claude_desktop_config.json` (if available)
@@ -46,15 +46,38 @@ Add the following configuration:
 **Important Notes:**
 - Use absolute paths (not relative)
 - Create the file if it doesn't exist
-- Restart Claude completely after configuration (Cmd+Q or right-click system tray → Quit)
+- Restart Claude Desktop completely after configuration (Cmd+Q or right-click system tray → Quit)
 </details>
 
 <details>
-<summary>⚡ VSCode Configuration</summary>
+<summary>Claude Code Configuration</summary>
 
-**Official Documentation:** [VSCode MCP Extension](https://marketplace.visualstudio.com/items?itemName=Anthropic.mcp)
+**Official Documentation:** [Claude Code MCP Setup](https://modelcontextprotocol.io/docs/develop/build-server)
 
-For VSCode with the official MCP extension, add to your `settings.json`:
+Claude Code uses the same configuration format as Claude Desktop. Edit your Claude Code configuration file:
+
+```json
+{
+  "mcpServers": {
+    "kat-planner": {
+      "command": "node",
+      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+**File Location:**
+- Configuration file location may vary - check Claude Code documentation for specific path
+</details>
+
+<details>
+<summary>VSCode Configuration</summary>
+
+**Documentation:** MCP support in VSCode is evolving. Check the VSCode marketplace for MCP extensions.
+
+For VSCode with MCP extensions, add to your `settings.json`:
 
 ```json
 {
@@ -80,12 +103,14 @@ Add to your workspace settings (`/.vscode/settings.json`):
   }
 }
 ```
+
+**Note:** MCP ecosystem in VSCode is rapidly evolving. Check the VSCode marketplace for the latest MCP extensions.
 </details>
 
 <details>
-<summary>🎯 Cursor IDE Configuration</summary>
+<summary>Cursor IDE Configuration</summary>
 
-**Official Documentation:** [Cursor MCP Setup](https://docs.cursor.so/mcp)
+**Documentation:** Cursor IDE has built-in MCP support. Check Cursor documentation for latest configuration details.
 
 For Cursor IDE, add to your MCP configuration file (location varies by platform):
 
@@ -107,7 +132,55 @@ For Cursor IDE, add to your MCP configuration file (location varies by platform)
 </details>
 
 <details>
-<summary>🔧 Generic MCP Configuration</summary>
+<summary>Windsurf Configuration</summary>
+
+**Documentation:** Windsurf is a newer terminal interface with evolving MCP support. Check Windsurf documentation for latest configuration.
+
+For Windsurf, add to your MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "kat-planner": {
+      "command": "node",
+      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Configuration File:**
+- Location varies by platform - check Windsurf documentation
+- Typically found in user configuration directories
+</details>
+
+<details>
+<summary>Warp.dev Configuration</summary>
+
+**Documentation:** Warp.dev terminal is actively developing MCP support. Check Warp.dev documentation for current configuration methods.
+
+For Warp.dev, configuration may use:
+
+```json
+{
+  "mcpServers": {
+    "kat-planner": {
+      "command": "node",
+      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Configuration Methods:**
+- Check Warp.dev settings or configuration files
+- May support both JSON config and environment variables
+</details>
+
+<details>
+<summary>Generic MCP Configuration</summary>
 
 **Official Documentation:** [MCP Protocol Specification](https://modelcontextprotocol.io/docs)
 
@@ -147,7 +220,7 @@ For any MCP-compatible tool, use this standard configuration format:
 
 ### 3. Restart Your Tool
 
-Restart Claude Desktop, Claude Code, or your MCP-compatible tool to load the server.
+Restart your MCP-compatible development tool to load the server configuration.
 
 ## Usage
 
