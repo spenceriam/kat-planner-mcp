@@ -22,10 +22,12 @@ Add kat-planner to your tool's MCP configuration:
 <details>
 <summary>📋 Claude Desktop / Claude Code Configuration</summary>
 
+**Official Documentation:** [Claude Desktop MCP Setup](https://modelcontextprotocol.io/docs/develop/build-server)
+
 Edit your Claude configuration file:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Linux: `~/.config/claude/claude_desktop_config.json`
+- Linux: `~/.config/claude/claude_desktop_config.json` (if available)
 
 Add the following configuration:
 
@@ -40,92 +42,19 @@ Add the following configuration:
   }
 }
 ```
-</details>
 
-<details>
-<summary>🤖 Factory.ai Droid Configuration</summary>
-
-For Factory.ai Droid, add to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Location of config file varies by platform - check Factory.ai documentation for your specific setup.
-</details>
-
-<details>
-<summary>💻 Codex CLI Configuration</summary>
-
-For Codex CLI, add to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Check Codex CLI documentation for config file location and format.
-</details>
-
-<details>
-<summary>🔍 Gemini CLI Configuration</summary>
-
-For Gemini CLI, add to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Refer to Gemini CLI documentation for config file specifics.
-</details>
-
-<details>
-<summary>🔧 Cursor-Agent Configuration</summary>
-
-For Cursor-Agent, add to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Check Cursor-Agent documentation for configuration file location.
+**Important Notes:**
+- Use absolute paths (not relative)
+- Create the file if it doesn't exist
+- Restart Claude completely after configuration (Cmd+Q or right-click system tray → Quit)
 </details>
 
 <details>
 <summary>⚡ VSCode Configuration</summary>
 
-For VSCode with MCP extensions, add to your settings.json:
+**Official Documentation:** [VSCode MCP Extension](https://marketplace.visualstudio.com/items?itemName=Anthropic.mcp)
+
+For VSCode with the official MCP extension, add to your `settings.json`:
 
 ```json
 {
@@ -138,13 +67,27 @@ For VSCode with MCP extensions, add to your settings.json:
 }
 ```
 
-Or add to your workspace settings if using workspace-specific configuration.
+**Alternative Method:**
+Add to your workspace settings (`/.vscode/settings.json`):
+
+```json
+{
+  "mcp.servers": {
+    "kat-planner": {
+      "command": "node",
+      "args": ["${workspaceFolder}/dist/index.js"]
+    }
+  }
+}
+```
 </details>
 
 <details>
-<summary>🎯 Cursor Configuration</summary>
+<summary>🎯 Cursor IDE Configuration</summary>
 
-For Cursor IDE, add to your MCP configuration:
+**Official Documentation:** [Cursor MCP Setup](https://docs.cursor.so/mcp)
+
+For Cursor IDE, add to your MCP configuration file (location varies by platform):
 
 ```json
 {
@@ -158,13 +101,17 @@ For Cursor IDE, add to your MCP configuration:
 }
 ```
 
-Check Cursor documentation for config file location.
+**File Locations:**
+- Check Cursor documentation for your specific platform
+- Common locations: `~/.cursor/` or `~/Library/Application Support/Cursor/`
 </details>
 
 <details>
-<summary>🌊 Windsurf Configuration</summary>
+<summary>🔧 Generic MCP Configuration</summary>
 
-For Windsurf, add to your MCP configuration:
+**Official Documentation:** [MCP Protocol Specification](https://modelcontextprotocol.io/docs)
+
+For any MCP-compatible tool, use this standard configuration format:
 
 ```json
 {
@@ -178,47 +125,11 @@ For Windsurf, add to your MCP configuration:
 }
 ```
 
-Refer to Windsurf documentation for configuration specifics.
-</details>
-
-<details>
-<summary>⚡ Warp.dev Configuration</summary>
-
-For Warp.dev, add to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Check Warp.dev documentation for config file location.
-</details>
-
-<details>
-<summary>🌐 Generic MCP Configuration</summary>
-
-For any MCP-compatible tool, use this generic configuration format:
-
-```json
-{
-  "mcpServers": {
-    "kat-planner": {
-      "command": "node",
-      "args": ["/absolute/path/to/kat-planner-mcp/dist/index.js"],
-      "env": {}
-    }
-  }
-}
-```
-
-Replace the path with your actual project path and adjust the format based on your tool's requirements.
+**Configuration Guidelines:**
+- Replace the path with your actual project path
+- Ensure Node.js is in your system PATH
+- Use absolute paths for reliability
+- Check your tool's documentation for specific file locations
 </details>
 
 #### For Development (Hot Reload)
