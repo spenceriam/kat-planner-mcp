@@ -4,7 +4,7 @@
  */
 class TestHarness {
   constructor() {
-    console.log('🧪 Initializing KAT-PLANNER Test Harness...\n');
+    console.log('Initializing KAT-PLANNER Test Harness...\n');
     this.tools = new Map();
   }
 
@@ -13,8 +13,8 @@ class TestHarness {
    */
   async start() {
     try {
-      console.log('✅ Test Harness started successfully');
-      console.log('🎯 Available tools for testing:');
+      console.log('Test Harness started successfully');
+      console.log('Available tools for testing:');
 
       // Extract tools from the server instance for testing
       this.extractTools();
@@ -25,7 +25,7 @@ class TestHarness {
       console.log('\n');
 
     } catch (error) {
-      console.error('❌ Failed to start Test Harness:', error);
+      console.error('Failed to start Test Harness:', error);
       throw error;
     }
   }
@@ -77,8 +77,8 @@ class TestHarness {
    * Simulate MCP tool call
    */
   async callTool(toolName, params) {
-    console.log(`🚀 Testing tool: ${toolName}`);
-    console.log(`📋 Parameters:`, params || 'none');
+    console.log(`Testing tool: ${toolName}`);
+    console.log(`Parameters:`, params || 'none');
 
     const tool = this.tools.get(toolName);
 
@@ -88,11 +88,11 @@ class TestHarness {
 
     try {
       const result = await tool(params);
-      console.log(`✅ Response:`, result.content[0].text);
+      console.log(`Response:`, result.content[0].text);
       console.log('---\n');
       return result;
     } catch (error) {
-      console.error(`❌ Tool call failed:`, error);
+      console.error(`Tool call failed:`, error);
       throw error;
     }
   }
@@ -101,7 +101,7 @@ class TestHarness {
    * Run comprehensive test suite
    */
   async runTestSuite() {
-    console.log('🧪 Running comprehensive test suite...\n');
+    console.log('Running comprehensive test suite...\n');
 
     const tests = [
       {
@@ -139,16 +139,16 @@ class TestHarness {
         await this.callTool(test.tool, test.params);
         passed++;
       } catch (error) {
-        console.error(`❌ Test failed: ${test.description}`, error);
+        console.error(`Test failed: ${test.description}`, error);
       }
     }
 
-    console.log(`\n📊 Test Results: ${passed}/${total} tests passed`);
+    console.log(`\nTest Results: ${passed}/${total} tests passed`);
 
     if (passed === total) {
-      console.log('🎉 All tests passed! The MCP server tools are working correctly.');
+      console.log('All tests passed! The MCP server tools are working correctly.');
     } else {
-      console.log('⚠️  Some tests failed. Please check the implementation.');
+      console.log('Some tests failed. Please check the implementation.');
     }
   }
 }
