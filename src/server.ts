@@ -70,7 +70,7 @@ export class KatPlannerServer {
         content: [
           {
             type: 'text' as const,
-            text: `✅ **SDD Generation Complete!**\n\nI've created comprehensive Software Design Documents for your project:\n\n**Generated Documents:**\n${sddDocuments.map(doc => `- ${doc.title}`).join('\n')}\n\n**Next Step:** Would you like me to generate comprehensive test specifications for these SDD documents? This will include test cases, edge cases, and validation criteria.\n\n*Reply "yes" to proceed with test generation or "no" to complete the planning process.*`
+            text: `✅ **SDD Generation Complete!**\n\nI've created comprehensive Software Design Documents for your project:\n\n**Generated Documents:**\n${sddDocuments.map((doc: { title: string }) => `- ${doc.title}`).join('\n')}\n\n**Next Step:** Would you like me to generate comprehensive test specifications for these SDD documents? This will include test cases, edge cases, and validation criteria.\n\n*Reply "yes" to proceed with test generation or "no" to complete the planning process.*`
           },
         ],
         structuredContent: {
@@ -235,6 +235,22 @@ export class KatPlannerServer {
   }
 
   /**
+   * Start the MCP server
+   */
+  public async start(): Promise<void> {
+    this.registerTools();
+
+    try {
+      const transport = new StdioServerTransport();
+      await this.server.connect(transport);
+      console.log('KAT-PLANNER MCP server started successfully!');
+    } catch (error) {
+      console.error('Failed to start MCP server:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Extract answers from user text
    */
   private extractAnswersFromText(text: string): Record<string, string> {
@@ -248,7 +264,7 @@ export class KatPlannerServer {
 
     // Extract button count
     const buttonMatch = text.match(/(\d+)[\s-]*(button|buttons)/i);
-    if (buttonMatch) answers.buttonCount = buttonMatch[1];
+    if (buttonMatch) answers.buttonCount = buttonMatch[1] || '';
 
     // Extract action preferences
     if (lowercaseText.includes('workspace') || lowercaseText.includes('desktop')) {
@@ -372,6 +388,13 @@ export class KatPlannerServer {
     }
 
     return documents;
+  }
+
+  /**
+   * Create final generic refined specification
+   */
+  private createGenericRefinedSpecification(answers: Record<string, string>): string {
+    return `**Project:** ${answers.projectName || 'Custom Application'}\n**Objective:** ${answers.objective || 'To be determined'}\n**Core Functionality:** ${answers.functionality || 'To be determined'}\n**Target Users:** ${answers.users || 'To be determined'}\n**Key Features:** ${answers.features || 'To be determined'}\n**Success Criteria:** ${answers.successCriteria || 'To be determined'}`;
   }
 }
 

@@ -17,6 +17,10 @@ export declare class KatPlannerServer {
      */
     private handleGenericRefinement;
     /**
+     * Start the MCP server
+     */
+    start(): Promise<void>;
+    /**
      * Extract answers from user text
      */
     private extractAnswersFromText;
@@ -44,6 +48,10 @@ export declare class KatPlannerServer {
      * Generate SDD documents based on project type
      */
     private generateSDDDocuments;
+    /**
+     * Create final generic refined specification
+     */
+    private createGenericRefinedSpecification;
 }
 /**
  * Main entry point
