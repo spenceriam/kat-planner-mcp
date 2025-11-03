@@ -9,9 +9,41 @@ export declare class KatPlannerServer {
      */
     private registerTools;
     /**
-     * Start the MCP server
+     * Handle mouse button mapping project refinement
      */
-    start(): Promise<void>;
+    private handleMouseButtonRefinement;
+    /**
+     * Handle generic project refinement for other project types
+     */
+    private handleGenericRefinement;
+    /**
+     * Extract answers from user text
+     */
+    private extractAnswersFromText;
+    /**
+     * Get missing requirements for mouse button projects
+     */
+    private getMissingMouseButtonRequirements;
+    /**
+     * Get missing requirements for generic projects
+     */
+    private getMissingGenericRequirements;
+    /**
+     * Generate mouse button project summary
+     */
+    private generateMouseButtonSummary;
+    /**
+     * Generate generic project summary
+     */
+    private generateGenericSummary;
+    /**
+     * Create final mouse button refined specification
+     */
+    private createMouseButtonRefinedSpecification;
+    /**
+     * Generate SDD documents based on project type
+     */
+    private generateSDDDocuments;
 }
 /**
  * Main entry point
