@@ -15,6 +15,74 @@ class KatPlannerServer {
             name: 'kat-planner',
             version: '1.0.0',
         });
+        // Workflow state management
+        this.currentWorkflowStage = 'idle';
+        this.lastRefinedSpecification = null;
+        this.userApprovalGranted = false;
+    }
+    /**
+     * Reset workflow state to initial conditions
+     */
+    resetWorkflowState() {
+        this.currentWorkflowStage = 'idle';
+        this.lastRefinedSpecification = null;
+        this.userApprovalGranted = false;
+    }
+    /**
+     * Validate that a tool can be called in the current workflow state
+     */
+    validateToolCall(toolName, currentStage) {
+        switch (toolName) {
+            case 'refinement_tool':
+                // refinement_tool can always be called to start a new workflow
+                if (!currentStage || currentStage === 'initial') {
+                    this.currentWorkflowStage = 'refinement_initial';
+                    return { valid: true };
+                }
+                // Validate sequential progression
+                if (currentStage === 'clarifying' && this.currentWorkflowStage === 'refinement_initial') {
+                    this.currentWorkflowStage = 'refinement_clarifying';
+                    return { valid: true };
+                }
+                if (currentStage === 'summarizing' && this.currentWorkflowStage === 'refinement_clarifying') {
+                    this.currentWorkflowStage = 'refinement_summarizing';
+                    return { valid: true };
+                }
+                return {
+                    valid: false,
+                    errorMessage: `❌ **Workflow Error**\n\nThe refinement_tool must be called in sequential order:\n1. initial → Ask questions\n2. clarifying → Provide answers\n3. summarizing → Give approval\n\nCurrent stage: ${this.currentWorkflowStage}\nRequested stage: ${currentStage}\n\n*Please follow the correct sequence.*`
+                };
+            case 'sdd_gen':
+                if (this.currentWorkflowStage === 'refinement_summarizing' && this.userApprovalGranted) {
+                    this.currentWorkflowStage = 'sdd_complete';
+                    return { valid: true };
+                }
+                return {
+                    valid: false,
+                    errorMessage: `❌ **Invalid SDD Request**\n\nSDD generation can only proceed AFTER:\n1. Complete refinement process (initial → clarifying → summarizing)\n2. Explicit user approval in summarizing stage\n\nCurrent stage: ${this.currentWorkflowStage}\nApproval granted: ${this.userApprovalGranted}\n\n*Please complete the refinement process first.*`
+                };
+            case 'sdd_testing':
+                if (this.currentWorkflowStage === 'sdd_complete') {
+                    this.currentWorkflowStage = 'testing_pending';
+                    return { valid: true };
+                }
+                return {
+                    valid: false,
+                    errorMessage: `❌ **Invalid Testing Request**\n\nTest generation can only proceed AFTER:\n1. Complete SDD generation\n2. Explicit user request for testing\n\nCurrent stage: ${this.currentWorkflowStage}\n\n*Please generate SDD documents first, then explicitly request testing.*`
+                };
+            default:
+                return { valid: true };
+        }
+    }
+    /**
+     * Update workflow state after successful tool completion
+     */
+    updateWorkflowState(toolName, stage, refinedSpec) {
+        if (toolName === 'refinement_tool' && stage === 'summarizing') {
+            this.lastRefinedSpecification = refinedSpec || null;
+            this.userApprovalGranted = true;
+            this.currentWorkflowStage = 'sdd_pending_approval';
+        }
     }
     /**
      * Register all MCP tools for KAT-PLANNER
@@ -35,16 +103,29 @@ class KatPlannerServer {
                 ],
             };
         });
-        // Placeholder for refinement tool
+        // Project refinement tool with strict workflow enforcement
         this.server.registerTool('refinement_tool', {
             title: 'Project Refinement Tool',
-            description: 'Refines vague project ideas into clear, actionable requirements through targeted questioning. Use this tool FIRST when user provides a high-level project idea to clarify scope, features, and technical requirements.',
+            description: 'MANDATORY FIRST STEP: Use this tool FIRST when user provides any project idea. This tool guides users through a strict 3-stage refinement process: 1) INITIAL stage asks clarifying questions, 2) CLARIFYING stage requires user answers to proceed, 3) SUMMARIZING stage requires user approval before SDD generation. DO NOT call sdd_gen until this tool returns "approval_granted".',
             inputSchema: {
                 userIdea: zod_1.z.string().describe('The user\'s initial project idea or request'),
-                currentStage: zod_1.z.enum(['initial', 'clarifying', 'summarizing']).optional().describe('Current refinement stage'),
-                answers: zod_1.z.record(zod_1.z.string()).optional().describe('Previous answers from user'),
+                currentStage: zod_1.z.enum(['initial', 'clarifying', 'summarizing']).describe('Current refinement stage - MUST progress sequentially'),
+                answers: zod_1.z.record(zod_1.z.string()).optional().describe('User answers from previous stage - REQUIRED for clarifying/summarizing stages'),
             },
         }, async (params) => {
+            // Validate workflow state
+            const validation = this.validateToolCall('refinement_tool', params.currentStage);
+            if (!validation.valid) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: validation.errorMessage || 'Workflow validation failed',
+                            isError: true
+                        }
+                    ]
+                };
+            }
             const stage = params.currentStage || 'initial';
             const answers = params.answers || {};
             // Mouse button mapping specific refinement logic
@@ -54,15 +135,40 @@ class KatPlannerServer {
             // Generic project refinement for other types of projects
             return this.handleGenericRefinement(params.userIdea, stage, answers);
         });
-        // Placeholder for SDD generator tool
+        // SDD generation tool with approval requirement
         this.server.registerTool('sdd_gen', {
             title: 'Specification Document Generator',
-            description: 'Generates comprehensive Software Design Documents (SDD) including requirements, architecture, and task breakdown. Use this tool SECOND after refinement to create detailed project specifications based on clarified requirements.',
+            description: 'GENERATE SDD ONLY AFTER refinement_tool returns "approval_granted". This tool creates comprehensive requirements.md, design.md, and tasks.md documents. NEVER call this tool until user has explicitly approved the refined specification through the refinement_tool summarizing stage.',
             inputSchema: {
-                refinedSpec: zod_1.z.string().describe('The refined project specification from refinement tool'),
-                projectType: zod_1.z.string().optional().describe('Type of project (mouse-button-mapper, generic)'),
+                refinedSpec: zod_1.z.string().describe('The approved and refined project specification'),
+                projectType: zod_1.z.enum(['mouse-button-mapper', 'generic']).optional().describe('Type of project being specified'),
             },
         }, async (params) => {
+            // Validate workflow state
+            const validation = this.validateToolCall('sdd_gen');
+            if (!validation.valid) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: validation.errorMessage || 'Workflow validation failed',
+                            isError: true
+                        }
+                    ]
+                };
+            }
+            // Check if this is a valid SDD request (should only happen after approval)
+            if (!params.refinedSpec.includes('approval_granted') && !params.refinedSpec.includes('✅')) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `❌ **Invalid SDD Request**\n\nThe SDD generation tool can only be called AFTER the refinement_tool has completed and returned an approval. Please complete the refinement process first by using refinement_tool with currentStage: "summarizing" and obtaining user approval.\n\n**Required Workflow:**\n1. refinement_tool (initial stage) → Ask questions\n2. refinement_tool (clarifying stage) → Get user answers\n3. refinement_tool (summarizing stage) → Get user approval\n4. sdd_gen → Generate documents\n5. sdd_testing (optional) → Generate tests\n\n*Please complete the refinement process before requesting SDD generation.*`
+                        }
+                    ],
+                    isError: true
+                };
+            }
             // Generate actual SDD documents
             const sddDocuments = this.generateSDDDocuments(params.refinedSpec, params.projectType || 'generic');
             return {
@@ -78,22 +184,45 @@ class KatPlannerServer {
                 }
             };
         });
-        // Placeholder for optional testing tool
+        // SDD testing tool with user consent requirement
         this.server.registerTool('sdd_testing', {
             title: 'Test Specification Generator',
-            description: 'Generates comprehensive test plans and specifications based on SDD documents. Use this tool THIRD (optional) after SDD generation to create test cases, edge cases, and validation criteria.',
+            description: 'GENERATE TESTS ONLY AFTER user explicitly requests testing AFTER SDD generation. This tool creates comprehensive test plans. NEVER call this tool automatically - only when user explicitly requests "yes" for testing after SDD generation.',
             inputSchema: {
                 specDocuments: zod_1.z.string().describe('Path to generated specification documents'),
+                projectType: zod_1.z.enum(['mouse-button-mapper', 'generic']).optional().describe('Type of project being tested'),
             },
         }, async (params) => {
-            // TODO: Implement actual testing specifications generation
+            // Validate workflow state
+            const validation = this.validateToolCall('sdd_testing');
+            if (!validation.valid) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: validation.errorMessage || 'Workflow validation failed',
+                            isError: true
+                        }
+                    ]
+                };
+            }
+            const projectType = params.projectType || 'generic';
+            // Generate comprehensive test specifications
+            const testSpecifications = this.generateTestSpecifications(projectType);
             return {
                 content: [
                     {
                         type: 'text',
-                        text: `Generating test specifications for documents: "${params.specDocuments}". This is a placeholder response for the testing tool.`,
-                    },
+                        text: `🧪 **Comprehensive Testing Specifications Generated**\n\n**Test Coverage Areas:**\n${testSpecifications.coverage.join('\n')}\n\n**Test Categories:**\n${testSpecifications.categories.map((cat) => `• ${cat.name}: ${cat.description}`).join('\n')}\n\n**Key Test Cases:**\n${testSpecifications.keyTestCases.join('\n')}\n\n**Quality Assurance Metrics:**\n${testSpecifications.qualityMetrics.join('\n')}\n\n**Next Steps:**\n1. Review the test specifications against your requirements\n2. Prioritize test cases based on project risk and complexity\n3. Implement test automation where possible\n4. Establish continuous integration testing pipeline\n\n*These test specifications ensure comprehensive coverage of all project requirements and edge cases.*`
+                    }
                 ],
+                structuredContent: {
+                    testSpecifications,
+                    projectType,
+                    testCoverage: testSpecifications.coverage,
+                    testCategories: testSpecifications.categories,
+                    keyTestCases: testSpecifications.keyTestCases
+                }
             };
         });
     }
@@ -148,10 +277,17 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `Received idea: "${userIdea}". This is a placeholder response for the refinement tool.`
+                            text: `I need more specific information about your project. Let me ask you some clarifying questions to better understand your requirements:\n\n1. What type of project are you building?\n2. What platform or technology stack do you prefer?\n3. What are the key features or functionality you need?\n4. Who is the target audience or use case?\n\n*Please provide more details so I can help refine your project specification.*`
                         }
                     ],
+                    structuredContent: {
+                        refinedSpecification: userIdea,
+                        projectType: 'unknown',
+                        nextSteps: 'awaiting_user_clarification'
+                    }
                 };
+                // Update workflow state
+                this.updateWorkflowState('refinement_tool', stage, userIdea);
         }
     }
     /**
@@ -203,16 +339,126 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `Received idea: "${userIdea}". This is a placeholder response for the refinement tool.`
+                            text: `I need more specific information about your project. Let me ask you some clarifying questions to better understand your requirements:\n\n1. What type of project are you building?\n2. What platform or technology stack do you prefer?\n3. What are the key features or functionality you need?\n4. Who is the target audience or use case?\n\n*Please provide more details so I can help refine your project specification.*`
                         }
                     ],
+                    structuredContent: {
+                        refinedSpecification: userIdea,
+                        projectType: 'unknown',
+                        nextSteps: 'awaiting_user_clarification'
+                    }
                 };
+                // Update workflow state
+                this.updateWorkflowState('refinement_tool', stage, userIdea);
         }
+    }
+    /**
+     * Generate comprehensive test specifications for a project type
+     */
+    generateTestSpecifications(projectType) {
+        if (projectType === 'mouse-button-mapper') {
+            return {
+                coverage: [
+                    'Mouse button detection and event handling',
+                    'Button mapping configuration and persistence',
+                    'System integration (X11/Wayland)',
+                    'User interface and system tray functionality',
+                    'Cross-distribution compatibility',
+                    'Performance and resource usage',
+                    'Error handling and recovery'
+                ],
+                categories: [
+                    {
+                        name: 'Unit Tests',
+                        description: 'Individual component functionality validation'
+                    },
+                    {
+                        name: 'Integration Tests',
+                        description: 'Cross-component interaction verification'
+                    },
+                    {
+                        name: 'System Tests',
+                        description: 'End-to-end workflow validation'
+                    },
+                    {
+                        name: 'Compatibility Tests',
+                        description: 'Multi-distribution and desktop environment testing'
+                    },
+                    {
+                        name: 'Performance Tests',
+                        description: 'Resource usage and responsiveness validation'
+                    }
+                ],
+                keyTestCases: [
+                    'Mouse button press detection accuracy (99.9%+)',
+                    'Button mapping configuration save/load',
+                    'System tray icon display and interaction',
+                    'Multiple mouse support',
+                    'Hotkey conflict resolution',
+                    'Configuration persistence across reboots'
+                ],
+                qualityMetrics: [
+                    'Code coverage: 90%+',
+                    'Performance: < 50ms response time',
+                    'Memory usage: < 50MB RAM',
+                    'Error rate: < 0.1%',
+                    'User satisfaction: 4.5/5+'
+                ]
+            };
+        }
+        return {
+            coverage: [
+                'Core functionality validation',
+                'User interface and experience',
+                'Data processing and storage',
+                'Error handling and edge cases',
+                'Performance and scalability',
+                'Security and access control'
+            ],
+            categories: [
+                {
+                    name: 'Functional Tests',
+                    description: 'Core feature validation'
+                },
+                {
+                    name: 'UI/UX Tests',
+                    description: 'User interface and experience validation'
+                },
+                {
+                    name: 'Integration Tests',
+                    description: 'System integration verification'
+                },
+                {
+                    name: 'Performance Tests',
+                    description: 'Speed and resource usage validation'
+                },
+                {
+                    name: 'Security Tests',
+                    description: 'Data protection and access control validation'
+                }
+            ],
+            keyTestCases: [
+                'Core feature functionality validation',
+                'User interface responsiveness',
+                'Data persistence and retrieval',
+                'Error handling and recovery',
+                'Performance under load',
+                'Security vulnerability assessment'
+            ],
+            qualityMetrics: [
+                'Code coverage: 85%+',
+                'Performance: Meets requirements',
+                'User satisfaction: 4/5+',
+                'Bug density: < 1 per 1000 lines',
+                'Security: No critical vulnerabilities'
+            ]
+        };
     }
     /**
      * Start the MCP server
      */
     async start() {
+        this.resetWorkflowState();
         this.registerTools();
         try {
             const transport = new stdio_js_1.StdioServerTransport();

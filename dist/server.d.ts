@@ -4,6 +4,21 @@
  */
 export declare class KatPlannerServer {
     private server;
+    private currentWorkflowStage;
+    private lastRefinedSpecification;
+    private userApprovalGranted;
+    /**
+     * Reset workflow state to initial conditions
+     */
+    private resetWorkflowState;
+    /**
+     * Validate that a tool can be called in the current workflow state
+     */
+    private validateToolCall;
+    /**
+     * Update workflow state after successful tool completion
+     */
+    private updateWorkflowState;
     /**
      * Register all MCP tools for KAT-PLANNER
      */
@@ -16,6 +31,10 @@ export declare class KatPlannerServer {
      * Handle generic project refinement for other project types
      */
     private handleGenericRefinement;
+    /**
+     * Generate comprehensive test specifications for a project type
+     */
+    private generateTestSpecifications;
     /**
      * Start the MCP server
      */
