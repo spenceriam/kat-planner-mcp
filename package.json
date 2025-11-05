@@ -2,11 +2,11 @@
   "name": "kat-planner-mcp",
   "version": "1.0.0",
   "description": "An MCP server that automates spec-driven development workflows for AI-assisted coding",
-  "main": "dist/index.js",
+  "main": "dist/server-production.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx src/server-production.ts",
+    "start": "node dist/server-production.js",
     "test": "jest"
   },
   "keywords": [
