@@ -7,16 +7,27 @@ import * as os from 'os';
  */
 interface Session {
   sessionId: string;
-  state: "questioning" | "refining" | "approved" | "development";
+  state: "questioning" | "refining" | "document_review" | "final_approval" | "development";
   userIdea: string;
   createdAt: number;
   lastActivity: number;
   answers?: Record<string, string>;
+  refinedSpecification?: string;
+  generatedDocuments?: Array<{ title: string; content: string }>;
+  approvalStatus?: {
+    requirements: boolean;
+    design: boolean;
+    tasks: boolean;
+    agents: boolean;
+    overall: boolean;
+  };
   developmentPlan?: {
     implementationSteps: string[];
     milestones: string[];
     estimatedTimeline: string;
   };
+  codebaseType?: "new_project" | "existing_with_docs" | "existing_without_docs";
+  projectType?: string;
 }
 
 /**
@@ -154,8 +165,9 @@ export class ProductionSessionManager {
   private canTransition(from: string, to: string): boolean {
     const validTransitions: Record<string, string[]> = {
       "questioning": ["refining"],
-      "refining": ["approved"],
-      "approved": []
+      "refining": ["document_review"],
+      "document_review": ["final_approval", "refining"], // Allow revisions
+      "final_approval": ["development"]
     };
 
     const allowedTransitions = validTransitions[from] || [];
@@ -344,11 +356,22 @@ export class ProductionSessionManager {
   private isValidSession(session: any): session is Session {
     return session &&
            typeof session.sessionId === 'string' &&
-           ['questioning', 'refining', 'approved'].includes(session.state) &&
+           ['questioning', 'refining', 'document_review', 'final_approval', 'development'].includes(session.state) &&
            typeof session.userIdea === 'string' &&
            typeof session.createdAt === 'number' &&
            typeof session.lastActivity === 'number' &&
-           (session.answers === undefined || typeof session.answers === 'object');
+           (session.answers === undefined || typeof session.answers === 'object') &&
+           (session.refinedSpecification === undefined || typeof session.refinedSpecification === 'string') &&
+           (session.generatedDocuments === undefined || Array.isArray(session.generatedDocuments)) &&
+           (session.approvalStatus === undefined || (
+             typeof session.approvalStatus === 'object' &&
+             typeof session.approvalStatus.requirements === 'boolean' &&
+             typeof session.approvalStatus.design === 'boolean' &&
+             typeof session.approvalStatus.tasks === 'boolean' &&
+             typeof session.approvalStatus.agents === 'boolean' &&
+             typeof session.approvalStatus.overall === 'boolean'
+           )) &&
+           (session.codebaseType === undefined || ['new_project', 'existing_with_docs', 'existing_without_docs'].includes(session.codebaseType));
   }
 
   /**
