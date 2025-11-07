@@ -95,10 +95,10 @@ WORKFLOW - This is a SINGLE CALL tool:
 - Returns progress tracking and milestone updates
 
 IMPORTANT: Only use this tool when ALL of the following are true:
-✅ Interactive specification workflow completed successfully
-✅ User provided explicit development approval
-✅ All SDD documents generated and reviewed
-✅ Session state is 'approved'`,
+Interactive specification workflow completed successfully
+User provided explicit development approval
+All SDD documents generated and reviewed
+Session state is 'approved'`,
       inputSchema: {
         sessionId: z.string().describe('Session ID from approved specification'),
         developmentPlan: z.object({
@@ -148,12 +148,12 @@ IMPORTANT: Only use this tool when ALL of the following are true:
     }
 
     // CRITICAL: State validation ensures proper workflow
-    if (session.state !== "approved") {
+    if (session.state !== "final_approval") {
       return this.formatErrorResponse(
-        `Invalid state transition. Current state: ${session.state}. Expected: approved → development`,
+        `Invalid state transition. Current state: ${session.state}. Expected: final_approval → development`,
         {
           suggestedAction: `Call with sessionId="${params.sessionId}" and valid state transition`,
-          validNextSteps: [`start_development from approved state`],
+          validNextSteps: [`start_development from final_approval state`],
           exampleCall: `start_development({ sessionId: "${params.sessionId}" })`
         }
       );
@@ -169,7 +169,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       lastActivity: Date.now()
     });
 
-    let output = `🚀 **Development Implementation Started!**\n\n`;
+    let output = `Development Implementation Started!\n\n`;
     output += `**Session ID:** ${params.sessionId}\n\n`;
     output += `**Development Plan:**\n`;
     output += `**Estimated Timeline:** ${developmentPlan.estimatedTimeline}\n\n`;
@@ -207,6 +207,42 @@ IMPORTANT: Only use this tool when ALL of the following are true:
     revisionRequest?: string;
   }) {
     try {
+      // Input validation
+      if (!params.userIdea && params.mode === 'question') {
+        return this.formatErrorResponse(
+          "userIdea is required for question mode",
+          {
+            suggestedAction: "Provide a userIdea for project planning",
+            validNextSteps: ["Provide userIdea"],
+            exampleCall: 'start_interactive_spec({ userIdea: "your project idea", mode: "question" })'
+          }
+        );
+      }
+
+      if (!params.mode) {
+        return this.formatErrorResponse(
+          "mode parameter is required",
+          {
+            suggestedAction: "Specify a valid mode: question, refine, document_review, or final_approval",
+            validNextSteps: ["question", "refine", "document_review", "final_approval"],
+            exampleCall: 'start_interactive_spec({ userIdea: "your idea", mode: "question" })'
+          }
+        );
+      }
+
+      // Validate mode parameter
+      const validModes = ['question', 'refine', 'document_review', 'final_approval'];
+      if (!validModes.includes(params.mode)) {
+        return this.formatErrorResponse(
+          `Invalid mode: ${params.mode}. Must be one of: ${validModes.join(', ')}`,
+          {
+            suggestedAction: "Use a valid mode parameter",
+            validNextSteps: validModes,
+            exampleCall: 'start_interactive_spec({ userIdea: "your idea", mode: "question" })'
+          }
+        );
+      }
+
       switch (params.mode) {
         case 'question':
           return await this.handleQuestionMode(params.userIdea);
@@ -229,7 +265,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       }
     } catch (error) {
       console.error('Interactive workflow error:', error);
-      return this.formatErrorResponse("Internal server error", {
+      return this.formatErrorResponse("Internal server error during workflow processing", {
         suggestedAction: "Try again or start a new session",
         validNextSteps: ["Start new session"],
         exampleCall: 'start_interactive_spec({ userIdea: "your idea", mode: "question" })'
@@ -257,7 +293,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       sessionId,
       content: [{
         type: 'text' as const,
-        text: `🎯 **Interactive Project Planning - Clarification Phase**\n\nI'll help plan your project through interactive refinement. Please answer these clarifying questions:\n\n${questions.join('\n')}\n\n*Provide your answers and I'll create a refined specification.*`
+        text: `Interactive Project Planning - Clarification Phase\n\nI'll help plan your project through interactive refinement. Please answer these clarifying questions:\n\n${questions.join('\n')}\n\n*Provide your answers and I'll create a refined specification.*`
       }],
       structuredContent: {
         questions,
@@ -331,7 +367,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       sessionId,
       content: [{
         type: 'text' as const,
-        text: `✅ **Interactive Project Planning - Refinement Phase**\n\nBased on your answers, here's your refined specification:\n\n${refinedSpec}\n\n*This specification is ready for final approval.*`
+        text: `Interactive Project Planning - Refinement Phase\n\nBased on your answers, here's your refined specification:\n\n${refinedSpec}\n\n*This specification is ready for final approval.*`
       }],
       structuredContent: {
         sessionId,
@@ -641,7 +677,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       error: true,
       content: [{
         type: 'text' as const,
-        text: `❌ **Error**: ${message}\n\n**Recovery**: ${recovery.suggestedAction}\n\n**Valid next steps**: ${recovery.validNextSteps.join(', ')}\n\n**Example call**: \`\`\`json\n${recovery.exampleCall}\n\`\`\``
+        text: `Error: ${message}\n\nRecovery: ${recovery.suggestedAction}\n\nValid next steps: ${recovery.validNextSteps.join(', ')}\n\nExample call: \`\`\`json\n${recovery.exampleCall}\n\`\`\``
       }],
       structuredContent: {
         error: true,
@@ -677,11 +713,17 @@ IMPORTANT: Only use this tool when ALL of the following are true:
 - Cross-distribution compatibility`;
   }
 
-  private detectProjectType(userIdea: string): string {
-    if (userIdea.toLowerCase().includes('mouse') && userIdea.toLowerCase().includes('button')) {
-      return 'mouse-button-mapper';
+  private detectProjectType(userIdea: string, existingFiles?: string[]): string {
+    // Check for existing project indicators only
+    if (existingFiles) {
+      if (existingFiles.includes('AGENTS.md') || existingFiles.includes('.spec/requirements.md')) {
+        return 'existing_enhancement';
+      }
+      if (existingFiles.includes('package.json') || existingFiles.includes('requirements.txt') || existingFiles.includes('pom.xml')) {
+        return 'existing_project';
+      }
     }
-    return 'generic';
+    return 'new_project';
   }
 
   private generateClarifyingQuestions(userIdea: string): string[] {
@@ -706,35 +748,224 @@ IMPORTANT: Only use this tool when ALL of the following are true:
   private generateSDDDocuments(refinedSpec: string, projectType: string): Array<{ title: string; content: string }> {
     const documents: Array<{ title: string; content: string }> = [];
 
-    if (projectType === 'mouse-button-mapper') {
+    // Generate generic SDD documents based on project type
+    if (projectType === 'existing_enhancement') {
       documents.push({
         title: 'requirements.md',
-        content: '# Functional Requirements\n\n## 1. Core Functionality\n- Real-time mouse button detection on Linux systems\n- Configurable mapping of mouse buttons to OS actions\n- Support for multiple mouse profiles\n- System tray integration for quick access'
+        content: `# Functional Requirements
+
+## 1. Enhancement Overview
+Based on the refined specification:
+${refinedSpec}
+
+## 2. Core Functionality
+- Enhancement to existing codebase functionality
+- Integration with existing architecture and patterns
+- Backward compatibility maintenance
+- Incremental feature addition`
       });
 
       documents.push({
         title: 'design.md',
-        content: '# Technical Design\n\n## Architecture Overview\n\n### Component Diagram\n```\n+----------------+     +----------------+     +----------------+\n|   Mouse Input  | --> |  Event Handler | --> |  Action Mapper |\n+----------------+     +----------------+     +----------------+\n                                |                    |\n                                v                    v\n                       +----------------+   +----------------+\n                       | Profile System |   | System Tray UI |\n                       +----------------+   +----------------+\n```\n\n## Core Components\n\n### 1. Mouse Input Layer\n- Uses pynput/evdev for low-level mouse event capture\n- Supports both USB and Bluetooth mice\n- Handles multiple mouse devices simultaneously'
+        content: `# Technical Design
+
+## Architecture Overview
+
+### Integration Points
+- Existing codebase integration strategy
+- API compatibility considerations
+- Data migration requirements (if any)
+- Testing strategy for existing functionality
+
+### Component Design
+- Enhancement component architecture
+- Interface with existing modules
+- Configuration and deployment considerations
+
+### Implementation Approach
+- Refactoring strategy
+- New component integration
+- Testing and validation plan`
       });
 
       documents.push({
         title: 'tasks.md',
-        content: '# Implementation Tasks\n\n## Phase 1: Core Infrastructure\n- [ ] Set up project structure and dependencies\n- [ ] Implement basic mouse event capture\n- [ ] Create configuration file structure\n- [ ] Set up logging and error handling'
+        content: `# Implementation Tasks
+
+## Phase 1: Analysis and Planning
+- [ ] Analyze existing codebase structure
+- [ ] Identify integration points and dependencies
+- [ ] Plan enhancement approach and architecture
+- [ ] Set up development environment
+
+## Phase 2: Core Enhancement
+- [ ] Implement core enhancement functionality
+- [ ] Integrate with existing components
+- [ ] Add configuration and customization options
+- [ ] Implement error handling and validation
+
+## Phase 3: Integration and Testing
+- [ ] Integrate enhancement with existing workflows
+- [ ] Create comprehensive test suite
+- [ ] Performance testing and optimization
+- [ ] Documentation and user guides
+
+## Phase 4: Deployment
+- [ ] Prepare deployment strategy
+- [ ] Create migration scripts (if needed)
+- [ ] Final testing and validation
+- [ ] Release preparation`
+      });
+    } else if (projectType === 'existing_project') {
+      documents.push({
+        title: 'requirements.md',
+        content: `# Functional Requirements
+
+## 1. Project Enhancement
+Based on the refined specification:
+${refinedSpec}
+
+## 2. Core Functionality
+- New feature development for existing project
+- Codebase analysis and understanding
+- Feature integration strategy
+- User experience improvements`
+      });
+
+      documents.push({
+        title: 'design.md',
+        content: `# Technical Design
+
+## Architecture Overview
+
+### Existing Codebase Analysis
+- Current architecture patterns and conventions
+- Technology stack and framework usage
+- Data models and database schema
+- API structure and endpoints
+
+### Enhancement Design
+- New feature architecture
+- Integration with existing systems
+- Data flow and processing
+- User interface considerations
+
+### Technical Implementation
+- Code organization and structure
+- Dependency management
+- Performance optimization
+- Security considerations`
+      });
+
+      documents.push({
+        title: 'tasks.md',
+        content: `# Implementation Tasks
+
+## Phase 1: Codebase Analysis
+- [ ] Analyze existing project structure and architecture
+- [ ] Understand current functionality and workflows
+- [ ] Identify integration points and dependencies
+- [ ] Plan enhancement strategy
+
+## Phase 2: Development Setup
+- [ ] Set up development environment
+- [ ] Configure build and deployment tools
+- [ ] Set up testing framework
+- [ ] Create development guidelines
+
+## Phase 3: Feature Implementation
+- [ ] Implement core new functionality
+- [ ] Integrate with existing codebase
+- [ ] Add user interface components
+- [ ] Implement data handling and storage
+
+## Phase 4: Testing and Quality Assurance
+- [ ] Unit testing for new features
+- [ ] Integration testing with existing code
+- [ ] User acceptance testing
+- [ ] Performance and security testing
+
+## Phase 5: Deployment
+- [ ] Prepare deployment configuration
+- [ ] Create release documentation
+- [ ] Final validation and testing
+- [ ] Production deployment`
       });
     } else {
+      // new_project
       documents.push({
         title: 'requirements.md',
-        content: '# Functional Requirements\n\n## 1. Core Functionality\n- [To be defined based on project requirements]'
+        content: `# Functional Requirements
+
+## 1. Project Overview
+Based on the refined specification:
+${refinedSpec}
+
+## 2. Core Functionality
+- Complete new project implementation
+- Modular architecture design
+- Scalable and maintainable code structure
+- User-friendly interface and experience`
       });
 
       documents.push({
         title: 'design.md',
-        content: '# Technical Design\n\n## Architecture Overview\n\n### Component Diagram\n```\n[To be defined based on project requirements]\n```'
+        content: `# Technical Design
+
+## Architecture Overview
+
+### System Architecture
+- High-level system design and components
+- Technology stack selection and rationale
+- Data flow and processing architecture
+- Integration and communication patterns
+
+### Component Design
+- Core system components and modules
+- User interface design and interaction
+- Data models and storage strategy
+- API design and endpoints
+
+### Technical Specifications
+- Framework and library selection
+- Development tools and processes
+- Testing and quality assurance approach
+- Deployment and hosting considerations`
       });
 
       documents.push({
         title: 'tasks.md',
-        content: '# Implementation Tasks\n\n## Phase 1: Core Infrastructure\n- [ ] Set up project structure and dependencies\n- [ ] Implement basic infrastructure\n- [ ] Create configuration system\n- [ ] Set up logging and error handling'
+        content: `# Implementation Tasks
+
+## Phase 1: Project Setup
+- [ ] Set up project structure and dependencies
+- [ ] Configure development environment
+- [ ] Set up version control and CI/CD
+- [ ] Create project documentation structure
+
+## Phase 2: Core Infrastructure
+- [ ] Implement basic project architecture
+- [ ] Set up data models and storage
+- [ ] Create configuration and logging systems
+- [ ] Implement error handling and validation
+
+## Phase 3: Core Features
+- [ ] Develop main functionality modules
+- [ ] Implement user interface components
+- [ ] Add configuration and customization
+- [ ] Create data processing and business logic
+
+## Phase 4: Advanced Features
+- [ ] Implement advanced functionality
+- [ ] Add user management and authentication
+- [ ] Create reporting and analytics features
+- [ ] Optimize performance and scalability
+
+## Phase 5: Testing and Deployment
+- [ ] Comprehensive testing suite
+- [ ] Performance optimization
+- [ ] Security review and hardening
+- [ ] Documentation and deployment preparation`
       });
     }
 
@@ -742,74 +973,110 @@ IMPORTANT: Only use this tool when ALL of the following are true:
   }
 
   private generateTestSpecifications(projectType: string): any {
-    if (projectType === 'mouse-button-mapper') {
+    // Generate generic test specifications based on project type
+    if (projectType === 'existing_enhancement') {
       return {
         coverage: [
-          'Mouse button detection and event handling',
-          'Button mapping configuration and persistence',
-          'System integration (X11/Wayland)',
-          'User interface and system tray functionality',
-          'Cross-distribution compatibility',
-          'Performance and resource usage',
-          'Error handling and recovery'
+          'Enhancement functionality validation',
+          'Existing system integration testing',
+          'Backward compatibility verification',
+          'API compatibility and regression testing',
+          'Data migration and transformation validation',
+          'Performance impact assessment',
+          'Error handling and recovery procedures'
         ],
         categories: [
-          { name: 'Unit Tests', description: 'Individual component functionality validation' },
-          { name: 'Integration Tests', description: 'Cross-component interaction verification' },
-          { name: 'System Tests', description: 'End-to-end workflow validation' },
-          { name: 'Compatibility Tests', description: 'Multi-distribution and desktop environment testing' },
-          { name: 'Performance Tests', description: 'Resource usage and responsiveness validation' }
+          { name: 'Regression Tests', description: 'Ensure existing functionality remains intact' },
+          { name: 'Integration Tests', description: 'Verify enhancement integrates with existing systems' },
+          { name: 'Compatibility Tests', description: 'Test compatibility with existing codebase' },
+          { name: 'Performance Tests', description: 'Assess performance impact of enhancement' },
+          { name: 'Migration Tests', description: 'Validate data migration and transformation' }
         ],
         keyTestCases: [
-          'Mouse button press detection accuracy (99.9%+)',
-          'Button mapping configuration save/load',
-          'System tray icon display and interaction',
-          'Multiple mouse support',
-          'Hotkey conflict resolution',
-          'Configuration persistence across reboots'
+          'Existing functionality continues to work correctly',
+          'Enhancement integrates seamlessly with current features',
+          'No breaking changes to existing APIs or interfaces',
+          'Data migration preserves all existing data integrity',
+          'Performance benchmarks meet acceptable thresholds',
+          'Error scenarios are handled gracefully without affecting existing features'
         ],
         qualityMetrics: [
-          'Code coverage: 90%+',
-          'Performance: < 50ms response time',
-          'Memory usage: < 50MB RAM',
-          'Error rate: < 0.1%',
-          'User satisfaction: 4.5/5+'
+          'Code coverage: 90%+ for new enhancement code',
+          'No regression in existing functionality test results',
+          'Performance impact: < 10% degradation maximum',
+          'Bug density: < 1 critical bug per 1000 lines',
+          'User acceptance: 4/5+ satisfaction rating'
+        ]
+      };
+    } else if (projectType === 'existing_project') {
+      return {
+        coverage: [
+          'New feature functionality validation',
+          'Existing codebase integration testing',
+          'System architecture compatibility',
+          'Data model and storage integration',
+          'User interface consistency',
+          'Performance and scalability testing',
+          'Security and access control validation'
+        ],
+        categories: [
+          { name: 'Feature Tests', description: 'New feature functionality validation' },
+          { name: 'Integration Tests', description: 'Integration with existing project components' },
+          { name: 'Architecture Tests', description: 'System architecture and design validation' },
+          { name: 'UI/UX Tests', description: 'User interface consistency and experience' },
+          { name: 'Security Tests', description: 'Security and access control validation' }
+        ],
+        keyTestCases: [
+          'New features work correctly in isolation',
+          'Integration with existing project components is seamless',
+          'User interface maintains consistency with existing patterns',
+          'Data models integrate properly with existing storage',
+          'Performance meets project standards and requirements',
+          'Security controls are properly implemented and tested'
+        ],
+        qualityMetrics: [
+          'Code coverage: 85%+ for new feature code',
+          'Integration test success rate: 95%+',
+          'Performance benchmarks: Meet or exceed targets',
+          'Security compliance: All critical vulnerabilities addressed',
+          'User satisfaction: 4/5+ rating for new features'
+        ]
+      };
+    } else {
+      // new_project
+      return {
+        coverage: [
+          'Core functionality validation',
+          'User interface and experience',
+          'Data processing and storage',
+          'Error handling and edge cases',
+          'Performance and scalability',
+          'Security and access control'
+        ],
+        categories: [
+          { name: 'Functional Tests', description: 'Core feature validation' },
+          { name: 'UI/UX Tests', description: 'User interface and experience validation' },
+          { name: 'Integration Tests', description: 'System integration verification' },
+          { name: 'Performance Tests', description: 'Speed and resource usage validation' },
+          { name: 'Security Tests', description: 'Data protection and access control validation' }
+        ],
+        keyTestCases: [
+          'Core feature functionality validation',
+          'User interface responsiveness',
+          'Data persistence and retrieval',
+          'Error handling and recovery',
+          'Performance under load',
+          'Security vulnerability assessment'
+        ],
+        qualityMetrics: [
+          'Code coverage: 85%+',
+          'Performance: Meets requirements',
+          'User satisfaction: 4/5+',
+          'Bug density: < 1 per 1000 lines',
+          'Security: No critical vulnerabilities'
         ]
       };
     }
-
-    return {
-      coverage: [
-        'Core functionality validation',
-        'User interface and experience',
-        'Data processing and storage',
-        'Error handling and edge cases',
-        'Performance and scalability',
-        'Security and access control'
-      ],
-      categories: [
-        { name: 'Functional Tests', description: 'Core feature validation' },
-        { name: 'UI/UX Tests', description: 'User interface and experience validation' },
-        { name: 'Integration Tests', description: 'System integration verification' },
-        { name: 'Performance Tests', description: 'Speed and resource usage validation' },
-        { name: 'Security Tests', description: 'Data protection and access control validation' }
-      ],
-      keyTestCases: [
-        'Core feature functionality validation',
-        'User interface responsiveness',
-        'Data persistence and retrieval',
-        'Error handling and recovery',
-        'Performance under load',
-        'Security vulnerability assessment'
-      ],
-      qualityMetrics: [
-        'Code coverage: 85%+',
-        'Performance: Meets requirements',
-        'User satisfaction: 4/5+',
-        'Bug density: < 1 per 1000 lines',
-        'Security: No critical vulnerabilities'
-      ]
-    };
   }
 
   /**

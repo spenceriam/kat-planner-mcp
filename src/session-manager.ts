@@ -166,7 +166,7 @@ export class ProductionSessionManager {
     const validTransitions: Record<string, string[]> = {
       "questioning": ["refining"],
       "refining": ["document_review"],
-      "document_review": ["final_approval", "refining"], // Allow revisions
+      "document_review": ["refining", "final_approval"], // Allow revisions
       "final_approval": ["development"]
     };
 
