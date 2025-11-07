@@ -45,32 +45,35 @@ This is the primary workflow for comprehensive spec-driven development:
 
 1. **Question Mode**: I'll ask clarifying questions to understand your project requirements
 2. **Refine Mode**: Based on your answers, I'll create a refined specification
-3. **Approve Mode**: Review generated documentation and approve development
+3. **Document Review Mode**: I'll generate SDD documents for your review and approval
+4. **Final Approval Mode**: You'll provide final approval to begin development
 
 USE THIS TOOL for ALL project planning. This ensures we:
 - Thoroughly understand your requirements
 - Create comprehensive specifications with proper documentation
 - Get approval for development before starting implementation
 
-WORKFLOW - Call this tool THREE times:
+WORKFLOW - Call this tool FOUR times:
 1. mode="question" - Get clarifying questions (you'll receive a sessionId)
 2. mode="refine" - Submit user's answers with the sessionId
-3. mode="approve" - Finalize spec, generate documentation, and get development approval
+3. mode="document_review" - Generate documents and get user approval
+4. mode="final_approval" - Finalize and prepare for development
 
 After EACH call, I will tell you EXACTLY what to do next. Follow those instructions.
 
 IMPORTANT: Each response includes a sessionId - you MUST include it in subsequent calls.
 
-NOTE: After successful approval, use 'start_development' tool to begin implementation.`,
+NOTE: After successful final approval, use 'start_development' tool to begin implementation.`,
 
       inputSchema: {
         userIdea: z.string().describe('The user\'s project idea'),
-        mode: z.enum(['question', 'refine', 'approve']).describe('Current mode: question, refine, or approve'),
+        mode: z.enum(['question', 'refine', 'document_review', 'final_approval']).describe('Current mode: question, refine, document_review, or final_approval'),
         sessionId: z.string().optional().describe('Session ID from previous interactive call'),
         userAnswers: z.record(z.union([z.string(), z.array(z.string())])).optional().describe('User answers to clarifying questions (string or array)'),
-        explicitApproval: z.enum(['yes', 'approved', 'proceed']).optional().describe('Explicit user approval for final spec'),
+        explicitApproval: z.enum(['yes', 'approved', 'proceed', 'continue', 'ok', 'go ahead', 'documents look good', 'ready for development']).optional().describe('Explicit user approval for next phase'),
+        revisionRequest: z.string().optional().describe('User feedback for document revision'),
       }
-    }, async (params: { userIdea: string; mode: string; sessionId?: string; userAnswers?: Record<string, string | string[]>; explicitApproval?: string }) => {
+    }, async (params: { userIdea: string; mode: string; sessionId?: string; userAnswers?: Record<string, string | string[]>; explicitApproval?: string; revisionRequest?: string }) => {
       return this.handleInteractiveWorkflow(params);
     });
     // Tool 3: Development Mode (stateful)
@@ -201,6 +204,7 @@ IMPORTANT: Only use this tool when ALL of the following are true:
     sessionId?: string;
     userAnswers?: Record<string, string | string[]>;
     explicitApproval?: string;
+    revisionRequest?: string;
   }) {
     try {
       switch (params.mode) {
@@ -210,13 +214,16 @@ IMPORTANT: Only use this tool when ALL of the following are true:
         case 'refine':
           return await this.handleRefineMode(params.sessionId, params.userAnswers);
 
-        case 'approve':
-          return await this.handleApproveMode(params.sessionId, params.userAnswers, params.explicitApproval);
+        case 'document_review':
+          return await this.handleDocumentReviewMode(params.sessionId, params.explicitApproval);
+
+        case 'final_approval':
+          return await this.handleFinalApprovalMode(params.sessionId, params.explicitApproval);
 
         default:
           return this.formatErrorResponse("Invalid mode specified", {
-            suggestedAction: "Use one of: question, refine, approve",
-            validNextSteps: ["question", "refine", "approve"],
+            suggestedAction: "Use one of: question, refine, document_review, final_approval",
+            validNextSteps: ["question", "refine", "document_review", "final_approval"],
             exampleCall: 'start_interactive_spec({ mode: "question", userIdea: "your idea" })'
           });
       }
@@ -339,21 +346,121 @@ IMPORTANT: Only use this tool when ALL of the following are true:
   }
 
   /**
-   * Handle approve mode with final validation
+   * Handle document review mode with SDD generation
    */
-  private async handleApproveMode(
+  private async handleDocumentReviewMode(
     sessionId: string | undefined,
-    userAnswers: Record<string, string | string[]> | undefined,
     explicitApproval: string | undefined
   ) {
     // CRITICAL: Session validation prevents loops
     if (!sessionId) {
       return this.formatErrorResponse(
-        "Session ID required for approval",
+        "Session ID required for document review",
+        {
+          suggestedAction: "Include sessionId from previous refine call",
+          validNextSteps: ["Provide sessionId"],
+          exampleCall: 'start_interactive_spec({ sessionId: "kat_123_abc", mode: "document_review" })'
+        }
+      );
+    }
+
+    const session = await this.sessionManager.getSession(sessionId);
+    if (!session) {
+      return this.formatErrorResponse(
+        "Invalid or expired session ID",
+        {
+          suggestedAction: "Start new interactive session or use correct sessionId",
+          validNextSteps: ["Start new session", "Use correct sessionId"],
+          exampleCall: 'start_interactive_spec({ userIdea: "your idea", mode: "question" })'
+        }
+      );
+    }
+
+    // CRITICAL: State validation prevents loops
+    if (session.state !== "refining") {
+      return this.formatErrorResponse(
+        `Invalid state transition. Current state: ${session.state}. Expected: refining → document_review`,
+        {
+          suggestedAction: `Call with sessionId="${sessionId}" and valid state transition`,
+          validNextSteps: [`mode="document_review" from refining state`],
+          exampleCall: `start_interactive_spec({ sessionId: "${sessionId}", mode: "document_review" })`
+        }
+      );
+    }
+
+    // Generate SDD documents if not already generated
+    let documents = session.generatedDocuments;
+    let refinedSpec = session.refinedSpecification;
+
+    if (!documents || !refinedSpec) {
+      // Generate refined specification if not exists
+      if (!refinedSpec) {
+        refinedSpec = this.createRefinedSpecification(session.userIdea);
+      }
+
+      // Generate SDD documents
+      const projectType = this.detectProjectType(session.userIdea);
+      documents = this.generateSDDDocuments(refinedSpec, projectType);
+
+      // Update session with generated content
+      await this.sessionManager.updateSession(sessionId, {
+        refinedSpecification: refinedSpec,
+        generatedDocuments: documents,
+        projectType: projectType,
+        lastActivity: Date.now()
+      });
+    }
+
+    // Format document content for user review
+    let output = `Interactive Project Planning - Document Review\n\n`;
+    output += `REVIEW: Please review these generated documents and provide approval.\n\n`;
+
+    // Add each document
+    documents.forEach(doc => {
+      output += `--- ${doc.title.toUpperCase()} ---\n`;
+      output += `${doc.content}\n\n`;
+    });
+
+    output += `REQUIRED ACTION: Ask the user: "Do these documents look good and should I proceed with development?"\n`;
+    output += `WAIT for user response before proceeding.\n`;
+
+    const response = {
+      sessionId,
+      content: [{
+        type: 'text' as const,
+        text: output
+      }],
+      structuredContent: {
+        sessionId,
+        refinedSpecification: refinedSpec,
+        generatedDocuments: documents,
+        state: "document_review",
+        nextStep: "final_approval",
+        workflowMode: 'interactive',
+        userInputRequired: true,
+        approvalNeeded: ["requirements.md", "design.md", "tasks.md", "AGENTS.md"],
+        exampleUserResponse: "Yes, the documents look good. Please proceed with development."
+      }
+    };
+
+    return this.formatResponse(response, 'document_review');
+  }
+
+  /**
+   * Handle final approval mode
+   */
+  private async handleFinalApprovalMode(
+    sessionId: string | undefined,
+    explicitApproval: string | undefined
+  ) {
+    // CRITICAL: Session validation prevents loops
+    if (!sessionId) {
+      return this.formatErrorResponse(
+        "Session ID required for final approval",
         {
           suggestedAction: "Include sessionId from previous calls",
           validNextSteps: ["Provide sessionId"],
-          exampleCall: 'start_interactive_spec({ sessionId: "kat_123_abc", mode: "approve" })'
+          exampleCall: 'start_interactive_spec({ sessionId: "kat_123_abc", mode: "final_approval" })'
         }
       );
     }
@@ -371,46 +478,52 @@ IMPORTANT: Only use this tool when ALL of the following are true:
     }
 
     // CRITICAL: State validation prevents loops
-    if (session.state !== "refining") {
+    if (session.state !== "document_review") {
       return this.formatErrorResponse(
-        `Invalid state transition. Current state: ${session.state}. Expected: refining → approved`,
+        `Invalid state transition. Current state: ${session.state}. Expected: document_review → final_approval`,
         {
           suggestedAction: `Call with sessionId="${sessionId}" and valid state transition`,
-          validNextSteps: [`mode="approve" from refining state`],
-          exampleCall: `start_interactive_spec({ sessionId: "${sessionId}", mode: "approve", explicitApproval: "yes" })`
+          validNextSteps: [`mode="final_approval" from document_review state`],
+          exampleCall: `start_interactive_spec({ sessionId: "${sessionId}", mode: "final_approval", explicitApproval: "yes" })`
         }
       );
     }
 
-    if (!explicitApproval || !['yes', 'approved', 'proceed'].includes(explicitApproval.toLowerCase())) {
+    // Validate approval
+    const validApprovals = ['yes', 'approved', 'proceed', 'continue', 'ok', 'go ahead', 'documents look good', 'ready for development'];
+    if (!explicitApproval || !validApprovals.some(approval => explicitApproval.toLowerCase().includes(approval))) {
       return this.formatErrorResponse(
         "Explicit approval required for final specification",
         {
-          suggestedAction: "Provide explicit approval to proceed",
+          suggestedAction: "Provide explicit approval to proceed with development",
           validNextSteps: ["Provide explicit approval"],
-          exampleCall: `start_interactive_spec({ sessionId: "${sessionId}", mode: "approve", explicitApproval: "yes" })`
+          exampleCall: `start_interactive_spec({ sessionId: "${sessionId}", mode: "final_approval", explicitApproval: "yes" })`
         }
       );
     }
 
-    // Generate final specification
-    const refinedSpec = this.createRefinedSpecification(session.userIdea);
-    const projectType = this.detectProjectType(session.userIdea);
-    const sddDocuments = this.generateSDDDocuments(refinedSpec, projectType);
-    const testSpecifications = this.generateTestSpecifications(projectType);
-
     // Finalize session
     await this.sessionManager.updateSession(sessionId, {
-      state: "approved",
-      answers: session.answers,
+      state: "final_approval",
+      approvalStatus: {
+        requirements: true,
+        design: true,
+        tasks: true,
+        agents: true,
+        overall: true
+      },
       lastActivity: Date.now()
     });
 
-    let output = `🎉 **Interactive Project Planning Complete!**\n\n`;
-    output += `**Final Refined Specification:**\n${refinedSpec}\n\n`;
-    output += `**Generated SDD Documents:**\n${sddDocuments.map(doc => `- ${doc.title}`).join('\n')}\n\n`;
-    output += `**Generated Test Specifications:**\n${testSpecifications.coverage.join('\n')}\n\n`;
-    output += `*Your comprehensively refined project plan is ready for implementation.*`;
+    let output = `Interactive Project Planning Complete\n\n`;
+    output += `FINAL APPROVAL: User has approved all generated documents.\n\n`;
+    output += `Documents Approved:\n`;
+    output += `- requirements.md\n`;
+    output += `- design.md\n`;
+    output += `- tasks.md\n`;
+    output += `- AGENTS.md\n\n`;
+    output += `NEXT ACTION: Use start_development tool to begin implementation.\n`;
+    output += `IMPLEMENTATION READY: Project plan is complete and ready for development.\n`;
 
     const response = {
       sessionId,
@@ -420,17 +533,15 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       }],
       structuredContent: {
         sessionId,
-        refinedSpecification: refinedSpec,
-        projectType: projectType,
-        sddDocuments: sddDocuments,
-        testSpecifications: testSpecifications,
-        state: "approved",
+        planningComplete: true,
+        approvedDocuments: ["requirements.md", "design.md", "tasks.md", "AGENTS.md"],
+        nextSteps: "start_development",
         workflowMode: 'interactive',
-        planningComplete: true
+        implementationReady: true
       }
     };
 
-    return this.formatResponse(response, 'approved');
+    return this.formatResponse(response, 'final_approval');
   }
 
   /**
@@ -444,21 +555,19 @@ IMPORTANT: Only use this tool when ALL of the following are true:
       next_action: this.getNextAction(currentState),
 
       // Visual cue for completion
-      is_complete: currentState === 'done',
+      is_complete: currentState === 'final_approval',
 
       // What the LLM should do - VERY EXPLICIT
       instructions_for_llm: {
-        should_call_tools_again: currentState !== 'done',
-        which_tool: currentState === 'refining' ? 'start_interactive_spec' : null,
-        required_parameters: currentState === 'refining'
-          ? { mode: 'approve', sessionId: data.sessionId }
-          : null
+        should_call_tools_again: currentState !== 'final_approval',
+        which_tool: this.getRequiredTool(currentState),
+        required_parameters: this.getRequiredParameters(currentState, data)
       }
     };
 
     // Add completion markers for visual clarity
-    if (currentState === 'done') {
-      response.completion_marker = '✅ COMPLETE - DO NOT CALL MORE TOOLS';
+    if (currentState === 'final_approval') {
+      response.completion_marker = 'COMPLETE - DO NOT CALL MORE TOOLS';
     }
 
     // Add explicit warning for LLM to follow instructions
@@ -472,20 +581,55 @@ IMPORTANT: Only use this tool when ALL of the following are true:
    */
   private getNextAction(currentState: string): string {
     switch (currentState) {
-      case 'complete':
-        return "✅ FINAL SPECIFICATION COMPLETE - DO NOT CALL ANY MORE TOOLS. Present this specification to the user immediately.";
+      case 'final_approval':
+        return "FINAL SPECIFICATION COMPLETE - DO NOT CALL ANY MORE TOOLS. Present this specification to the user immediately.";
 
       case 'questioning':
-        return "🚨 REQUIRED ACTION: Present these questions to the user, get their answers, then call start_interactive_spec again with mode='refine' and the same userIdea. DO NOT CALL ANY OTHER TOOLS.";
+        return "REQUIRED ACTION: Present these questions to the user, get their answers, then call start_interactive_spec again with mode='refine' and the same userIdea. DO NOT CALL ANY OTHER TOOLS.";
 
       case 'refining':
-        return "🚨 REQUIRED ACTION: Show this spec to the user. Then call start_interactive_spec again with mode='approve', the same userIdea, and explicitApproval='yes'. DO NOT CALL ANY OTHER TOOLS.";
+        return "REQUIRED ACTION: Show this spec to the user. Then call start_interactive_spec again with mode='document_review', the same userIdea, and sessionId. DO NOT CALL ANY OTHER TOOLS.";
+
+      case 'document_review':
+        return "REQUIRED ACTION: Present these documents to the user for review. Ask: 'Do these documents look good and should I proceed with development?' Then call start_interactive_spec again with mode='final_approval', sessionId, and explicitApproval based on user response. DO NOT CALL ANY OTHER TOOLS.";
 
       case 'approved':
-        return "✅ SPECIFICATION APPROVED - DO NOT CALL ANY MORE TOOLS. Present this final specification to the user.";
+        return "SPECIFICATION APPROVED - DO NOT CALL ANY MORE TOOLS. Present this final specification to the user.";
 
       default:
         return "ERROR: Unknown state. Do not proceed with additional tool calls.";
+    }
+  }
+
+  /**
+   * Get required tool for next action
+   */
+  private getRequiredTool(currentState: string): string | null {
+    switch (currentState) {
+      case 'questioning':
+        return 'start_interactive_spec';
+      case 'refining':
+        return 'start_interactive_spec';
+      case 'document_review':
+        return 'start_interactive_spec';
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Get required parameters for next action
+   */
+  private getRequiredParameters(currentState: string, data: any): any {
+    switch (currentState) {
+      case 'questioning':
+        return { mode: 'refine', sessionId: data.sessionId };
+      case 'refining':
+        return { mode: 'document_review', sessionId: data.sessionId };
+      case 'document_review':
+        return { mode: 'final_approval', sessionId: data.sessionId, explicitApproval: '[user response]' };
+      default:
+        return null;
     }
   }
 
