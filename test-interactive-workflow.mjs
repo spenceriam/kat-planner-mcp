@@ -11,6 +11,8 @@ async function testInteractiveWorkflow() {
   const server = new ProductionKatPlannerServer();
   await server.start();
 
+  let currentSessionId = null;
+
   // Test 1: Question Mode
   console.log('1. Testing Question Mode...');
   try {
@@ -24,8 +26,8 @@ async function testInteractiveWorkflow() {
     console.log('Response includes next_action:', !!questionResponse.next_action);
     console.log('Response includes llm_directive:', !!questionResponse.llm_directive);
 
-    const sessionId = questionResponse.sessionId;
-    console.log(`Session ID: ${sessionId}`);
+    currentSessionId = questionResponse.sessionId;
+    console.log(`Session ID: ${currentSessionId}`);
 
   } catch (error) {
     console.log('❌ Question mode failed:', error.message);
@@ -37,7 +39,7 @@ async function testInteractiveWorkflow() {
     const refineResponse = await server['handleInteractiveWorkflow']({
       userIdea: 'Create a Linux system monitoring tool',
       mode: 'refine',
-      sessionId: 'test_session_123',
+      sessionId: currentSessionId,
       userAnswers: {
         'Platform preference': 'Python',
         'Target distributions': 'Ubuntu and Debian',
@@ -56,7 +58,7 @@ async function testInteractiveWorkflow() {
   // Test 3: Document Review Mode
   console.log('\n3. Testing Document Review Mode...');
   try {
-    const documentResponse = await server['handleDocumentReviewMode']('test_session_123', undefined);
+    const documentResponse = await server['handleDocumentReviewMode'](currentSessionId, undefined);
 
     console.log('✅ Document review mode successful');
     console.log('Response includes documents:', !!documentResponse.structuredContent?.generatedDocuments);
@@ -69,7 +71,7 @@ async function testInteractiveWorkflow() {
   // Test 4: Final Approval Mode
   console.log('\n4. Testing Final Approval Mode...');
   try {
-    const approvalResponse = await server['handleFinalApprovalMode']('test_session_123', 'yes');
+    const approvalResponse = await server['handleFinalApprovalMode'](currentSessionId, 'yes');
 
     console.log('✅ Final approval mode successful');
     console.log('Response includes planningComplete:', approvalResponse.structuredContent?.planningComplete);
@@ -99,7 +101,7 @@ async function testInteractiveWorkflow() {
   console.log('\n6. Testing Development Mode...');
   try {
     const developmentResponse = await server['handleDevelopmentWorkflow']({
-      sessionId: 'test_session_123',
+      sessionId: currentSessionId,
       developmentPlan: {
         implementationSteps: ['Setup project', 'Implement monitoring', 'Add alerts'],
         milestones: ['Basic monitoring', 'Alert system', 'Dashboard'],

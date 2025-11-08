@@ -106,11 +106,11 @@ class KatPlannerServer {
         // Project refinement tool with strict workflow enforcement
         this.server.registerTool('refinement_tool', {
             title: 'Project Refinement Tool',
-            description: 'MANDATORY FIRST STEP: Use this tool FIRST when user provides any project idea. This tool guides users through a strict 3-stage refinement process: 1) INITIAL stage asks clarifying questions, 2) CLARIFYING stage requires user answers to proceed, 3) SUMMARIZING stage requires user approval before SDD generation. DO NOT call sdd_gen until this tool returns "approval_granted".',
+            description: 'MANDATORY WORKFLOW: This tool MUST be called in EXACT sequence. Stage 1 (initial): Ask questions - Stage 2 (clarifying): User provides answers - Stage 3 (summarizing): User gives approval. DO NOT call this tool unless you are in the correct stage. NEVER call sdd_gen until Stage 3 completes with user approval. This tool will BLOCK if called out of sequence.',
             inputSchema: {
                 userIdea: zod_1.z.string().describe('The user\'s initial project idea or request'),
-                currentStage: zod_1.z.enum(['initial', 'clarifying', 'summarizing']).describe('Current refinement stage - MUST progress sequentially'),
-                answers: zod_1.z.record(zod_1.z.string()).optional().describe('User answers from previous stage - REQUIRED for clarifying/summarizing stages'),
+                currentStage: zod_1.z.enum(['initial', 'clarifying', 'summarizing']).describe('Current stage - MUST match actual workflow progress'),
+                answers: zod_1.z.record(zod_1.z.string()).optional().describe('User answers from previous stage - REQUIRED if not first call'),
             },
         }, async (params) => {
             // Validate workflow state
@@ -128,6 +128,29 @@ class KatPlannerServer {
             }
             const stage = params.currentStage || 'initial';
             const answers = params.answers || {};
+            // Additional validation: prevent repeated calls in same stage without user input
+            if (stage === 'clarifying' && !params.answers) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `❌ **Repeated Call Blocked**\n\nThe refinement_tool is being called repeatedly in the "${stage}" stage without user input. This tool requires actual user answers from the previous stage to proceed.\n\n**Required Workflow:**\n1. initial → Ask questions\n2. clarifying → User provides answers\n3. summarizing → User gives approval\n\n*This tool will NOT proceed until the user provides actual answers to the questions from the previous stage.*`,
+                            isError: true
+                        }
+                    ]
+                };
+            }
+            if (stage === 'summarizing' && !params.answers) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `❌ **Repeated Call Blocked**\n\nThe refinement_tool is being called repeatedly in the "${stage}" stage without user approval. This stage requires explicit user approval to proceed.\n\n**Required Workflow:**\n1. initial → Ask questions\n2. clarifying → User provides answers\n3. summarizing → User gives approval\n\n*This tool will NOT proceed until the user provides explicit approval of the refined specification.*`,
+                            isError: true
+                        }
+                    ]
+                };
+            }
             // Mouse button mapping specific refinement logic
             if (params.userIdea.toLowerCase().includes('mouse') && params.userIdea.toLowerCase().includes('button')) {
                 return this.handleMouseButtonRefinement(params.userIdea, stage, answers);
@@ -138,9 +161,9 @@ class KatPlannerServer {
         // SDD generation tool with approval requirement
         this.server.registerTool('sdd_gen', {
             title: 'Specification Document Generator',
-            description: 'GENERATE SDD ONLY AFTER refinement_tool returns "approval_granted". This tool creates comprehensive requirements.md, design.md, and tasks.md documents. NEVER call this tool until user has explicitly approved the refined specification through the refinement_tool summarizing stage.',
+            description: 'MANDATORY APPROVAL REQUIRED: This tool can ONLY be called AFTER refinement_tool completes Stage 3 (summarizing) WITH explicit user approval. The refinedSpec parameter MUST contain "approval_granted" or "". DO NOT call this tool unless user has explicitly approved the specification. This tool will BLOCK if called prematurely.',
             inputSchema: {
-                refinedSpec: zod_1.z.string().describe('The approved and refined project specification'),
+                refinedSpec: zod_1.z.string().describe('The approved and refined project specification WITH explicit user approval'),
                 projectType: zod_1.z.enum(['mouse-button-mapper', 'generic']).optional().describe('Type of project being specified'),
             },
         }, async (params) => {
@@ -157,13 +180,14 @@ class KatPlannerServer {
                     ]
                 };
             }
-            // Check if this is a valid SDD request (should only happen after approval)
-            if (!params.refinedSpec.includes('approval_granted') && !params.refinedSpec.includes('✅')) {
+            // STRONGER validation: Check for explicit approval indicators
+            if (!params.refinedSpec.includes('approval_granted') && !params.refinedSpec.includes('') && !params.refinedSpec.includes('approval')) {
                 return {
                     content: [
                         {
                             type: 'text',
-                            text: `❌ **Invalid SDD Request**\n\nThe SDD generation tool can only be called AFTER the refinement_tool has completed and returned an approval. Please complete the refinement process first by using refinement_tool with currentStage: "summarizing" and obtaining user approval.\n\n**Required Workflow:**\n1. refinement_tool (initial stage) → Ask questions\n2. refinement_tool (clarifying stage) → Get user answers\n3. refinement_tool (summarizing stage) → Get user approval\n4. sdd_gen → Generate documents\n5. sdd_testing (optional) → Generate tests\n\n*Please complete the refinement process before requesting SDD generation.*`
+                            text: `❌ **APPROVAL REQUIRED - TOOL BLOCKED**\n\nThe sdd_gen tool requires EXPLICIT USER APPROVAL before SDD generation can proceed.\n\n**Mandatory Requirements:**\n1. refinement_tool must complete Stage 3 (summarizing)\n2. User must explicitly approve the refined specification\n3. refinedSpec parameter MUST contain approval indicators\n\n**Current Status:**\n- refinement_tool Stage 3: ❌ Not completed\n- User approval: ❌ Not provided\n- Approval indicators in refinedSpec: ❌ Missing\n\n*This tool is BLOCKED until proper workflow completion and explicit user approval are achieved.*`,
+                            isError: true
                         }
                     ],
                     isError: true
@@ -175,7 +199,7 @@ class KatPlannerServer {
                 content: [
                     {
                         type: 'text',
-                        text: `✅ **SDD Generation Complete!**\n\nI've created comprehensive Software Design Documents for your project:\n\n**Generated Documents:**\n${sddDocuments.map((doc) => `- ${doc.title}`).join('\n')}\n\n**Next Step:** Would you like me to generate comprehensive test specifications for these SDD documents? This will include test cases, edge cases, and validation criteria.\n\n*Reply "yes" to proceed with test generation or "no" to complete the planning process.*`
+                        text: ` **SDD Generation Complete!**\n\nI've created comprehensive Software Design Documents for your project:\n\n**Generated Documents:**\n${sddDocuments.map((doc) => `- ${doc.title}`).join('\n')}\n\n**Next Step:** Would you like me to generate comprehensive test specifications for these SDD documents? This will include test cases, edge cases, and validation criteria.\n\n*Reply "yes" to proceed with test generation or "no" to complete the planning process.*`
                     },
                 ],
                 structuredContent: {
@@ -213,7 +237,7 @@ class KatPlannerServer {
                 content: [
                     {
                         type: 'text',
-                        text: `🧪 **Comprehensive Testing Specifications Generated**\n\n**Test Coverage Areas:**\n${testSpecifications.coverage.join('\n')}\n\n**Test Categories:**\n${testSpecifications.categories.map((cat) => `• ${cat.name}: ${cat.description}`).join('\n')}\n\n**Key Test Cases:**\n${testSpecifications.keyTestCases.join('\n')}\n\n**Quality Assurance Metrics:**\n${testSpecifications.qualityMetrics.join('\n')}\n\n**Next Steps:**\n1. Review the test specifications against your requirements\n2. Prioritize test cases based on project risk and complexity\n3. Implement test automation where possible\n4. Establish continuous integration testing pipeline\n\n*These test specifications ensure comprehensive coverage of all project requirements and edge cases.*`
+                        text: ` **Comprehensive Testing Specifications Generated**\n\n**Test Coverage Areas:**\n${testSpecifications.coverage.join('\n')}\n\n**Test Categories:**\n${testSpecifications.categories.map((cat) => `• ${cat.name}: ${cat.description}`).join('\n')}\n\n**Key Test Cases:**\n${testSpecifications.keyTestCases.join('\n')}\n\n**Quality Assurance Metrics:**\n${testSpecifications.qualityMetrics.join('\n')}\n\n**Next Steps:**\n1. Review the test specifications against your requirements\n2. Prioritize test cases based on project risk and complexity\n3. Implement test automation where possible\n4. Establish continuous integration testing pipeline\n\n*These test specifications ensure comprehensive coverage of all project requirements and edge cases.*`
                     }
                 ],
                 structuredContent: {
@@ -236,7 +260,7 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `🎯 **Mouse Button Mapping Project Refinement**\n\nI'll help refine your mouse button mapping application. Let's clarify the key requirements:\n\n**Platform Choice:** You mentioned both Electron and Python. For Linux mouse detection, Python with libraries like pynput/evdev is more straightforward than Electron. Which approach do you prefer?\n\n**Button Support:** How many mouse buttons should we detect? Standard mice have 3 buttons, but gaming mice can have 5-8 additional buttons.\n\n**OS Actions:** You mentioned workspace switching. Should we also support:\n- Browser navigation (forward/back)\n- Volume control\n- Screenshot capture\n- Custom user-defined actions?\n\n**Distribution Support:** Should the app work across all Linux distributions or focus on Ubuntu/Debian specifically?\n\n*Please provide your preferences for these questions, and I'll create a refined specification.*`
+                            text: ` **Mouse Button Mapping Project Refinement**\n\nI'll help refine your mouse button mapping application. Let's clarify the key requirements:\n\n**Platform Choice:** You mentioned both Electron and Python. For Linux mouse detection, Python with libraries like pynput/evdev is more straightforward than Electron. Which approach do you prefer?\n\n**Button Support:** How many mouse buttons should we detect? Standard mice have 3 buttons, but gaming mice can have 5-8 additional buttons.\n\n**OS Actions:** You mentioned workspace switching. Should we also support:\n- Browser navigation (forward/back)\n- Volume control\n- Screenshot capture\n- Custom user-defined actions?\n\n**Distribution Support:** Should the app work across all Linux distributions or focus on Ubuntu/Debian specifically?\n\n*Please provide your preferences for these questions, and I'll create a refined specification.*`
                         }
                     ],
                 };
@@ -263,7 +287,7 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `✅ **Refinement Complete!**\n\n**Refined Specification:**\n${refinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
+                            text: ` **Refinement Complete!**\n\n**Refined Specification:**\n${refinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
                         }
                     ],
                     structuredContent: {
@@ -300,7 +324,7 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `🎯 **Project Refinement Started**\n\nI'll help refine your project idea through targeted questioning. Let's clarify:\n\n1. **Core Functionality:** What is the primary problem this project solves?\n2. **Target Users:** Who will use this application?\n3. **Key Features:** What are the essential features for the initial release?\n4. **Technical Constraints:** Any specific platforms, languages, or frameworks to use?\n5. **Success Criteria:** How will you measure the project's success?\n\n*Please provide details on these areas so I can create a clear, actionable specification.*`
+                            text: ` **Project Refinement Started**\n\nI'll help refine your project idea through targeted questioning. Let's clarify:\n\n1. **Core Functionality:** What is the primary problem this project solves?\n2. **Target Users:** Who will use this application?\n3. **Key Features:** What are the essential features for the initial release?\n4. **Technical Constraints:** Any specific platforms, languages, or frameworks to use?\n5. **Success Criteria:** How will you measure the project's success?\n\n*Please provide details on these areas so I can create a clear, actionable specification.*`
                         }
                     ],
                 };
@@ -325,7 +349,7 @@ class KatPlannerServer {
                     content: [
                         {
                             type: 'text',
-                            text: `✅ **Refinement Complete!**\n\n**Refined Specification:**\n${genericRefinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
+                            text: ` **Refinement Complete!**\n\n**Refined Specification:**\n${genericRefinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
                         }
                     ],
                     structuredContent: {

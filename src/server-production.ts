@@ -10,12 +10,60 @@ export class ProductionKatPlannerServer {
   private server = new McpServer({
     name: 'kat-planner-production',
     version: '1.0.0',
+    title: 'KAT-PLANNER Interactive Project Planning Assistant',
+    description: 'AI-powered project planning assistant that guides users through comprehensive specification development with interactive workflow management',
   });
 
   private sessionManager = new ProductionSessionManager();
 
   constructor() {
     this.registerTools();
+    this.registerSystemPrompt();
+  }
+
+  /**
+   * Register system prompt to guide LLM behavior from the start
+   */
+  private registerSystemPrompt(): void {
+    // Register a system prompt that provides overarching guidance to the LLM
+    // This prompt will be available to the LLM at connection time to understand the interactive workflow
+    const systemInstructions = `You are an Interactive Project Planning Assistant that manages a 4-step specification workflow:
+
+STEP 1 - Question Mode: Ask clarifying questions to understand project requirements
+STEP 2 - Refine Mode: Create refined specification based on user answers
+STEP 3 - Document Review Mode: Generate SDD documents for user review and approval
+STEP 4 - Final Approval Mode: Get final approval before development begins
+
+CRITICAL REQUIREMENTS:
+1. PRESENT ALL QUESTIONS/DOCUMENTS TO THE USER EXPLICITLY
+2. WAIT FOR THE USER'S ACTUAL RESPONSES - DO NOT ANSWER QUESTIONS YOURSELF
+3. DO NOT MAKE UP USER RESPONSES OR ANSWERS
+4. DO NOT PROCEED WITHOUT EXPLICIT USER APPROVAL
+5. INCLUDE sessionId in all subsequent tool calls
+
+FAILURE TO FOLLOW THESE INSTRUCTIONS WILL RESULT IN INCORRECT SPECIFICATION DEVELOPMENT.
+
+Always use the next_action field to determine your next step. Do NOT call any tools unless explicitly instructed in the next_action field.`;
+
+    this.server.registerPrompt('system_instructions',
+      {
+        title: 'System Instructions',
+        description: 'Overarching guidance for interactive project planning workflow',
+      },
+      () => ({
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: systemInstructions
+            }
+          }
+        ]
+      })
+    );
+
+    console.log('System prompt registered for interactive workflow guidance');
   }
 
   /**
@@ -39,31 +87,21 @@ export class ProductionKatPlannerServer {
     // Tool 2: Interactive Mode (stateful)
     this.server.registerTool('start_interactive_spec', {
       title: 'Interactive Specification Development',
-      description: `Start an interactive specification process for thorough project planning.
+      description: `INTERACTIVE WORKFLOW: This tool manages a 4-step interactive specification process where YOU MUST WAIT FOR USER INPUT at each step.
 
-This is the primary workflow for comprehensive spec-driven development:
+STEP 1 - Question Mode: Ask clarifying questions to understand project requirements
+STEP 2 - Refine Mode: Create refined specification based on user answers
+STEP 3 - Document Review Mode: Generate SDD documents for user review and approval
+STEP 4 - Final Approval Mode: Get final approval before development begins
 
-1. **Question Mode**: I'll ask clarifying questions to understand your project requirements
-2. **Refine Mode**: Based on your answers, I'll create a refined specification
-3. **Document Review Mode**: I'll generate SDD documents for your review and approval
-4. **Final Approval Mode**: You'll provide final approval to begin development
+🚨 CRITICAL: This is an INTERACTIVE workflow. You MUST:
+1. Present questions/documents to the user
+2. WAIT for the user's actual responses
+3. Do NOT answer questions yourself or make up user responses
+4. Do NOT proceed without explicit user approval
+5. Include sessionId in all subsequent calls
 
-USE THIS TOOL for ALL project planning. This ensures we:
-- Thoroughly understand your requirements
-- Create comprehensive specifications with proper documentation
-- Get approval for development before starting implementation
-
-WORKFLOW - Call this tool FOUR times:
-1. mode="question" - Get clarifying questions (you'll receive a sessionId)
-2. mode="refine" - Submit user's answers with the sessionId
-3. mode="document_review" - Generate documents and get user approval
-4. mode="final_approval" - Finalize and prepare for development
-
-After EACH call, I will tell you EXACTLY what to do next. Follow those instructions.
-
-IMPORTANT: Each response includes a sessionId - you MUST include it in subsequent calls.
-
-NOTE: After successful final approval, use 'start_development' tool to begin implementation.`,
+Each step requires user interaction and approval before proceeding to the next.`,
 
       inputSchema: {
         userIdea: z.string().describe('The user\'s project idea'),
@@ -607,7 +645,7 @@ Session state is 'approved'`,
     }
 
     // Add explicit warning for LLM to follow instructions
-    response.llm_directive = "IMPORTANT: Follow the next_action instructions EXACTLY. Do not call any other tools unless explicitly instructed in next_action.";
+    response.llm_directive = "🚨 CRITICAL INSTRUCTION: This is an INTERACTIVE workflow. You MUST wait for actual user input at each step. Do NOT answer your own questions, do NOT make up user responses, and do NOT proceed without explicit user approval. The next_action field tells you exactly what to do - follow it precisely.";
 
     return response;
   }
@@ -618,22 +656,22 @@ Session state is 'approved'`,
   private getNextAction(currentState: string): string {
     switch (currentState) {
       case 'final_approval':
-        return "FINAL SPECIFICATION COMPLETE - DO NOT CALL ANY MORE TOOLS. Present this specification to the user immediately.";
+        return "✅ WORKFLOW COMPLETE: The specification has been fully approved and is ready for development. Do NOT call any more tools. Present the complete specification to the user and wait for their instructions.";
 
       case 'questioning':
-        return "REQUIRED ACTION: Present these questions to the user, get their answers, then call start_interactive_spec again with mode='refine' and the same userIdea. DO NOT CALL ANY OTHER TOOLS.";
+        return "🚨 USER INPUT REQUIRED: You MUST wait for the user to answer these questions before proceeding. Do NOT answer the questions yourself or make up answers. Present the questions to the user exactly as shown, then wait for their responses. Only after receiving the user's answers should you call start_interactive_spec again with mode='refine' and include the user's answers in the userAnswers parameter.";
 
       case 'refining':
-        return "REQUIRED ACTION: Show this spec to the user. Then call start_interactive_spec again with mode='document_review', the same userIdea, and sessionId. DO NOT CALL ANY OTHER TOOLS.";
+        return "🚨 USER REVIEW REQUIRED: You MUST show this refined specification to the user for their review. Do NOT proceed without user feedback. After the user reviews the specification, call start_interactive_spec again with mode='document_review', the same userIdea, and the sessionId. Wait for user approval before generating documents.";
 
       case 'document_review':
-        return "REQUIRED ACTION: Present these documents to the user for review. Ask: 'Do these documents look good and should I proceed with development?' Then call start_interactive_spec again with mode='final_approval', sessionId, and explicitApproval based on user response. DO NOT CALL ANY OTHER TOOLS.";
+        return "🚨 USER APPROVAL REQUIRED: You MUST present these generated documents to the user for their approval. Ask the user: 'Do these documents look good and should I proceed with development?' Do NOT proceed without explicit user approval. Only after receiving the user's explicit approval should you call start_interactive_spec again with mode='final_approval', the sessionId, and the user's explicitApproval response.";
 
       case 'approved':
-        return "SPECIFICATION APPROVED - DO NOT CALL ANY MORE TOOLS. Present this final specification to the user.";
+        return "✅ SPECIFICATION APPROVED: The specification has been approved by the user. Do NOT call any more tools. Present this final specification to the user and wait for their next instructions.";
 
       default:
-        return "ERROR: Unknown state. Do not proceed with additional tool calls.";
+        return "🚨 ERROR: Unknown workflow state. Do NOT proceed with any tool calls. Report this error to the user and wait for their guidance.";
     }
   }
 
@@ -692,25 +730,28 @@ Session state is 'approved'`,
     return { platform: 'Python', buttonCount: '5+ programmable buttons', actions: 'workspace_switching', distributions: 'Ubuntu/Debian focused', projectType: 'mouse-button-mapper' };
   }
 
-  private createRefinedSpecification(analysis: any): string {
-    return `**Project:** Linux Mouse Button Mapper
-**Objective:** Create a cross-distribution Linux application that detects mouse buttons and maps them to customizable OS actions
-**Platform:** ${analysis.platform}
-**Target Distributions:** Ubuntu 20.04+, Debian 11+, Fedora 34+
-**Button Support:** ${analysis.buttonCount}
-**Core Features:**
-- Real-time mouse button detection
-- Configurable action mapping per button
-- Multiple mouse profile support
-- System tray interface
-- Auto-start capability
-**Required Actions:** ${analysis.actions}
+  private createRefinedSpecification(userIdea: string): string {
+    return `**Project:** ${userIdea}
+**Objective:** Create a comprehensive solution that addresses the project requirements based on user specifications
+**Platform:** Platform to be determined based on project requirements
+**Target Users:** Primary user groups identified during requirements gathering
+**Key Features:**
+- Core functionality implementation
+- User interface and experience design
+- Data processing and storage
+- Integration with external systems (if applicable)
+- Configuration and customization options
+**Technical Requirements:**
+- Scalable and maintainable architecture
+- Performance optimization considerations
+- Security best practices implementation
+- Cross-platform compatibility (if applicable)
 **Success Criteria:**
-- Detect all mouse buttons reliably
-- Map buttons to actions with <100ms latency
-- Support hot-plug detection
-- Maintain <5% CPU usage during idle
-- Cross-distribution compatibility`;
+- Project objectives fully achieved
+- User requirements satisfied
+- Technical performance benchmarks met
+- Code quality and maintainability standards achieved
+- Successful deployment and operation`;
   }
 
   private detectProjectType(userIdea: string, existingFiles?: string[]): string {
