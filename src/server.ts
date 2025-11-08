@@ -112,8 +112,8 @@ export class KatPlannerServer {
 
     // Project refinement tool with strict workflow enforcement
     this.server.registerTool('refinement_tool', {
-      title: 'Project Refinement Tool',
-      description: 'MANDATORY FIRST STEP: Use this tool FIRST when user provides any project idea. This tool guides users through a strict 3-stage refinement process: 1) INITIAL stage asks clarifying questions, 2) CLARIFYING stage requires user answers to proceed, 3) SUMMARIZING stage requires user approval before SDD generation. DO NOT call sdd_gen until this tool returns "approval_granted".',
+      title: '🚨 MANDATORY FIRST STEP - ASK QUESTIONS 🚨',
+      description: '🚨 CRITICAL MANDATORY TOOL: You MUST call this tool FIRST when user provides ANY project idea. This tool conducts mandatory interactive questioning in 3 required phases: 1) INITIAL phase asks clarifying questions, 2) CLARIFYING phase processes user answers, 3) SUMMARIZING phase gets explicit user approval. DO NOT call sdd_gen until this tool completes ALL 3 phases and provides explicit approval. This is the ONLY way to start project planning. FAILURE TO FOLLOW THIS WILL RESULT IN SYSTEM ERROR.',
       inputSchema: {
         userIdea: z.string().describe('The user\'s initial project idea or request'),
         currentStage: z.enum(['initial', 'clarifying', 'summarizing']).describe('Current refinement stage - MUST progress sequentially'),
@@ -137,19 +137,14 @@ export class KatPlannerServer {
       const stage = params.currentStage || 'initial';
       const answers = params.answers || {};
 
-      // Mouse button mapping specific refinement logic
-      if (params.userIdea.toLowerCase().includes('mouse') && params.userIdea.toLowerCase().includes('button')) {
-        return this.handleMouseButtonRefinement(params.userIdea, stage, answers);
-      }
-
-      // Generic project refinement for other types of projects
+      // Generic project refinement for all project types - LLM handles domain expertise
       return this.handleGenericRefinement(params.userIdea, stage, answers);
     });
 
     // SDD generation tool with approval requirement
     this.server.registerTool('sdd_gen', {
-      title: 'Specification Document Generator',
-      description: 'GENERATE SDD ONLY AFTER refinement_tool returns "approval_granted". This tool creates comprehensive requirements.md, design.md, and tasks.md documents. NEVER call this tool until user has explicitly approved the refined specification through the refinement_tool summarizing stage.',
+      title: '🚨 GENERATE SDD DOCUMENTS - APPROVAL REQUIRED 🚨',
+      description: '🚨 CRITICAL APPROVAL CHECK: You can ONLY call this tool AFTER refinement_tool has completed ALL 3 phases (initial → clarifying → summarizing) AND provided explicit user approval. This tool creates requirements.md, design.md, and tasks.md. NEVER call this tool until user has explicitly approved the refined specification. If you attempt to call this without proper approval, it will return an immediate critical error and block all further operations.',
       inputSchema: {
         refinedSpec: z.string().describe('The approved and refined project specification'),
         projectType: z.enum(['mouse-button-mapper', 'generic']).optional().describe('Type of project being specified'),
@@ -201,8 +196,8 @@ export class KatPlannerServer {
 
     // SDD testing tool with user consent requirement
     this.server.registerTool('sdd_testing', {
-      title: 'Test Specification Generator',
-      description: 'GENERATE TESTS ONLY AFTER user explicitly requests testing AFTER SDD generation. This tool creates comprehensive test plans. NEVER call this tool automatically - only when user explicitly requests "yes" for testing after SDD generation.',
+      title: 'Generate Test Specifications - EXPLICIT CONSENT REQUIRED',
+      description: 'WARNING: You can ONLY call this tool AFTER SDD generation AND ONLY if user explicitly requests testing. This tool creates comprehensive test plans. NEVER call this tool automatically - only when user explicitly says "yes" to testing after SDD generation.',
       inputSchema: {
         specDocuments: z.string().describe('Path to generated specification documents'),
         projectType: z.enum(['mouse-button-mapper', 'generic']).optional().describe('Type of project being tested'),
@@ -246,83 +241,8 @@ export class KatPlannerServer {
   }
 
   /**
-   * Handle mouse button mapping project refinement
-   */
-  private async handleMouseButtonRefinement(
-    userIdea: string,
-    stage: string,
-    answers: Record<string, string>
-  ) {
-    switch (stage) {
-      case 'initial':
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `🎯 **Mouse Button Mapping Project Refinement**\n\nI'll help refine your mouse button mapping application. Let's clarify the key requirements:\n\n**Platform Choice:** You mentioned both Electron and Python. For Linux mouse detection, Python with libraries like pynput/evdev is more straightforward than Electron. Which approach do you prefer?\n\n**Button Support:** How many mouse buttons should we detect? Standard mice have 3 buttons, but gaming mice can have 5-8 additional buttons.\n\n**OS Actions:** You mentioned workspace switching. Should we also support:\n- Browser navigation (forward/back)\n- Volume control\n- Screenshot capture\n- Custom user-defined actions?\n\n**Distribution Support:** Should the app work across all Linux distributions or focus on Ubuntu/Debian specifically?\n\n*Please provide your preferences for these questions, and I'll create a refined specification.*`
-            }
-          ],
-        };
-
-      case 'clarifying':
-        // Store the user's answers and ask follow-up questions
-        const updatedAnswers = { ...answers, ...this.extractAnswersFromText(userIdea) };
-
-        const missingInfo = this.getMissingMouseButtonRequirements(updatedAnswers);
-        if (missingInfo.length > 0) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `📋 **Additional Clarifications Needed**\n\nBased on your input, I still need clarification on:\n\n${missingInfo.map(info => `- ${info}`).join('\n')}\n\n*Please provide these details so I can create a complete specification.*`
-              }
-            ],
-          };
-        }
-
-        return this.generateMouseButtonSummary(updatedAnswers);
-
-      case 'summarizing':
-        // User has approved the summary, generate final refined spec
-        const finalAnswers = { ...answers, ...this.extractAnswersFromText(userIdea) };
-        const refinedSpec = this.createMouseButtonRefinedSpecification(finalAnswers);
-
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `✅ **Refinement Complete!**\n\n**Refined Specification:**\n${refinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
-            }
-          ],
-          structuredContent: {
-            refinedSpecification: refinedSpec,
-            projectType: 'mouse-button-mapper',
-            requirements: finalAnswers
-          }
-        };
-
-      default:
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `I need more specific information about your project. Let me ask you some clarifying questions to better understand your requirements:\n\n1. What type of project are you building?\n2. What platform or technology stack do you prefer?\n3. What are the key features or functionality you need?\n4. Who is the target audience or use case?\n\n*Please provide more details so I can help refine your project specification.*`
-            }
-          ],
-          structuredContent: {
-            refinedSpecification: userIdea,
-            projectType: 'unknown',
-            nextSteps: 'awaiting_user_clarification'
-          }
-        };
-
-      // Update workflow state
-      this.updateWorkflowState('refinement_tool', stage, userIdea);
-    }
-  }
-
-  /**
-   * Handle generic project refinement for other project types
+   * Handle generic project refinement for all project types
+   * The LLM provides domain expertise while the MCP ensures proper workflow
    */
   private async handleGenericRefinement(
     userIdea: string,
@@ -335,21 +255,37 @@ export class KatPlannerServer {
           content: [
             {
               type: 'text' as const,
-              text: `🎯 **Project Refinement Started**\n\nI'll help refine your project idea through targeted questioning. Let's clarify:\n\n1. **Core Functionality:** What is the primary problem this project solves?\n2. **Target Users:** Who will use this application?\n3. **Key Features:** What are the essential features for the initial release?\n4. **Technical Constraints:** Any specific platforms, languages, or frameworks to use?\n5. **Success Criteria:** How will you measure the project's success?\n\n*Please provide details on these areas so I can create a clear, actionable specification.*`
+              text: `**MANDATORY PROJECT PLANNING - PHASE 1: ASK QUESTIONS**
+
+I need to clarify your project requirements before we can proceed with any planning or implementation. Please provide details on these key areas:
+
+1. **Core Problem**: What specific problem does this project solve?
+2. **Target Users**: Who will use this application and what are their needs?
+3. **Key Features**: What are the essential features for the initial release?
+4. **Technical Context**: Any specific platforms, technologies, or constraints?
+5. **Success Metrics**: How will you measure the project's success?
+
+*This clarification is REQUIRED before any specification or implementation can begin.*`
             }
           ],
         };
 
       case 'clarifying':
         const updatedAnswers = { ...answers, ...this.extractAnswersFromText(userIdea) };
-        const missingGenericInfo = this.getMissingGenericRequirements(updatedAnswers);
+        const missingInfo = this.getMissingGenericRequirements(updatedAnswers);
 
-        if (missingGenericInfo.length > 0) {
+        if (missingInfo.length > 0) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `📋 **Additional Information Needed**\n\nI still need clarification on:\n\n${missingGenericInfo.map(info => `- ${info}`).join('\n')}\n\n*Please provide these details for a complete specification.*`
+                text: `**MANDATORY PROJECT PLANNING - PHASE 2: GET ANSWERS**
+
+I still need clarification on these areas before we can proceed:
+
+${missingInfo.map(info => `- ${info}`).join('\n')}
+
+*Please provide these details so I can create a complete specification.*`
               }
             ],
           };
@@ -365,13 +301,22 @@ export class KatPlannerServer {
           content: [
             {
               type: 'text' as const,
-              text: `✅ **Refinement Complete!**\n\n**Refined Specification:**\n${genericRefinedSpec}\n\n**Next Step:** Would you like me to generate comprehensive Software Design Documents (SDD) for this refined specification? This will include detailed requirements, architecture design, and implementation roadmap.\n\n*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
+              text: `**MANDATORY PROJECT PLANNING - PHASE 3: GET APPROVAL**
+
+**Refined Specification:**
+${genericRefinedSpec}
+
+**NEXT STEP: SDD GENERATION**
+Would you like me to generate comprehensive Software Design Documents (requirements.md, design.md, tasks.md) for this approved specification?
+
+*Reply "yes" to proceed with SDD generation or provide any final adjustments to the requirements.*`
             }
           ],
           structuredContent: {
             refinedSpecification: genericRefinedSpec,
             projectType: 'generic',
-            requirements: finalGenericAnswers
+            requirements: finalGenericAnswers,
+            approvalRequired: true
           }
         };
 
@@ -380,7 +325,16 @@ export class KatPlannerServer {
           content: [
             {
               type: 'text' as const,
-              text: `I need more specific information about your project. Let me ask you some clarifying questions to better understand your requirements:\n\n1. What type of project are you building?\n2. What platform or technology stack do you prefer?\n3. What are the key features or functionality you need?\n4. Who is the target audience or use case?\n\n*Please provide more details so I can help refine your project specification.*`
+              text: `**WORKFLOW ERROR**
+
+I need to clarify your project requirements. Please provide more details about:
+
+1. What type of project are you building?
+2. What problem does it solve?
+3. Who will use it?
+4. What are the key features needed?
+
+*This information is REQUIRED to proceed with project planning.*`
             }
           ],
           structuredContent: {
@@ -389,112 +343,69 @@ export class KatPlannerServer {
             nextSteps: 'awaiting_user_clarification'
           }
         };
-
-      // Update workflow state
-      this.updateWorkflowState('refinement_tool', stage, userIdea);
     }
   }
 
   /**
-   * Generate comprehensive test specifications for a project type
+   * Generate comprehensive test specifications for any project type
+   * The LLM determines project-specific test requirements based on the refined specification
    */
   private generateTestSpecifications(projectType: string): any {
-    if (projectType === 'mouse-button-mapper') {
-      return {
-        coverage: [
-          'Mouse button detection and event handling',
-          'Button mapping configuration and persistence',
-          'System integration (X11/Wayland)',
-          'User interface and system tray functionality',
-          'Cross-distribution compatibility',
-          'Performance and resource usage',
-          'Error handling and recovery'
-        ],
-        categories: [
-          {
-            name: 'Unit Tests',
-            description: 'Individual component functionality validation'
-          },
-          {
-            name: 'Integration Tests',
-            description: 'Cross-component interaction verification'
-          },
-          {
-            name: 'System Tests',
-            description: 'End-to-end workflow validation'
-          },
-          {
-            name: 'Compatibility Tests',
-            description: 'Multi-distribution and desktop environment testing'
-          },
-          {
-            name: 'Performance Tests',
-            description: 'Resource usage and responsiveness validation'
-          }
-        ],
-        keyTestCases: [
-          'Mouse button press detection accuracy (99.9%+)',
-          'Button mapping configuration save/load',
-          'System tray icon display and interaction',
-          'Multiple mouse support',
-          'Hotkey conflict resolution',
-          'Configuration persistence across reboots'
-        ],
-        qualityMetrics: [
-          'Code coverage: 90%+',
-          'Performance: < 50ms response time',
-          'Memory usage: < 50MB RAM',
-          'Error rate: < 0.1%',
-          'User satisfaction: 4.5/5+'
-        ]
-      };
-    }
-
     return {
       coverage: [
         'Core functionality validation',
-        'User interface and experience',
-        'Data processing and storage',
+        'User interface and experience testing',
+        'Data processing and storage validation',
         'Error handling and edge cases',
-        'Performance and scalability',
-        'Security and access control'
+        'Performance and scalability testing',
+        'Security and access control validation',
+        'Integration testing with external systems',
+        'User acceptance and usability testing'
       ],
       categories: [
         {
-          name: 'Functional Tests',
-          description: 'Core feature validation'
-        },
-        {
-          name: 'UI/UX Tests',
-          description: 'User interface and experience validation'
+          name: 'Unit Tests',
+          description: 'Individual component functionality validation'
         },
         {
           name: 'Integration Tests',
-          description: 'System integration verification'
+          description: 'Cross-component interaction verification'
+        },
+        {
+          name: 'System Tests',
+          description: 'End-to-end workflow validation'
         },
         {
           name: 'Performance Tests',
-          description: 'Speed and resource usage validation'
+          description: 'Resource usage and responsiveness validation'
         },
         {
           name: 'Security Tests',
           description: 'Data protection and access control validation'
+        },
+        {
+          name: 'Usability Tests',
+          description: 'User experience and interface validation'
         }
       ],
       keyTestCases: [
         'Core feature functionality validation',
-        'User interface responsiveness',
-        'Data persistence and retrieval',
-        'Error handling and recovery',
-        'Performance under load',
-        'Security vulnerability assessment'
+        'User interface responsiveness and accessibility',
+        'Data persistence and retrieval accuracy',
+        'Error handling and recovery procedures',
+        'Performance under expected load',
+        'Security vulnerability and penetration testing',
+        'Cross-platform compatibility validation',
+        'User workflow completion success rate'
       ],
       qualityMetrics: [
         'Code coverage: 85%+',
-        'Performance: Meets requirements',
-        'User satisfaction: 4/5+',
-        'Bug density: < 1 per 1000 lines',
-        'Security: No critical vulnerabilities'
+        'Performance: Meets defined requirements',
+        'User satisfaction: 4/5+ rating',
+        'Bug density: < 1 per 1000 lines of code',
+        'Security: No critical vulnerabilities',
+        'Reliability: 99%+ uptime during testing',
+        'Usability: 90%+ task completion rate'
       ]
     };
   }
@@ -509,7 +420,9 @@ export class KatPlannerServer {
     try {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
+
       console.log('KAT-PLANNER MCP server started successfully!');
+      console.log('Enhanced workflow enforcement active.');
     } catch (error) {
       console.error('Failed to start MCP server:', error);
       throw error;
