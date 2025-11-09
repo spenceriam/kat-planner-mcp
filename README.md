@@ -4,6 +4,16 @@ An MCP (Model Context Protocol) server that automates spec-driven development wo
 
 Built for the KwaiKAT AI Dev Challenge using KAT-Coder-Pro V1.
 
+## What's New: Slash Commands System
+
+This implementation now features a structured slash commands system that provides clear, step-by-step workflow guidance for LLMs. Instead of relying on tool descriptions alone, the MCP server now offers explicit slash commands that the LLM can follow to ensure proper interactive planning.
+
+**Key Benefits:**
+- Clear command-driven workflow prevents LLM from jumping ahead
+- Structured guidance through each planning phase
+- MCP resource-based approach guides LLM behavior without forcing
+- Prevents LLM from starting implementation before proper planning
+
 ## Quick Start
 
 ### 1. Clone and Install
@@ -18,6 +28,24 @@ npm run build
 ### 2. Configure MCP Tool
 
 Add kat-planner to your tool's MCP configuration:
+
+#### Slash Commands Server (Recommended)
+
+For the new slash commands system, use the dedicated server:
+
+```json
+{
+  "mcpServers": {
+    "kat-planner-slash": {
+      "command": "node",
+      "args": ["/absolute/path/to/kat-planner-mcp/dist/server-slash.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+**Note:** The slash commands server provides structured workflow guidance through MCP resources instead of forcing the LLM through tool descriptions.
 
 <details>
 <summary>Claude Desktop Configuration</summary>
@@ -222,19 +250,116 @@ For any MCP-compatible tool, use this standard configuration format:
 
 Restart your MCP-compatible development tool to load the server configuration.
 
+## Slash Commands Usage
+
+The slash commands system provides structured workflow guidance. When using the `kat-planner-slash` server, the LLM will have access to MCP resources that guide it through the proper planning sequence.
+
+### Available Slash Commands
+
+#### Planning Phase
+- **`/plan_project`** - Start interactive project planning workflow
+- **`/refine_requirements`** - Refine project requirements through interactive questioning
+- **`/analyze_project`** - Analyze existing project structure and codebase
+
+#### Specification Phase
+- **`/generate_specification`** - Generate comprehensive specification documents
+- **`/enhance_specification`** - Enhance existing project specification with new requirements
+
+#### Implementation Planning Phase
+- **`/plan_implementation`** - Create detailed implementation plan with phases and tasks
+- **`/plan_enhancement`** - Plan enhancement implementation for existing projects
+
+#### Quality Assurance Phase
+- **`/generate_tests`** - Generate comprehensive test specifications and test cases
+- **`/generate_enhancement_tests`** - Generate tests for enhanced functionality
+
+#### Documentation Phase
+- **`/create_documentation`** - Create project documentation and user guides
+
+#### Review Phase
+- **`/final_review`** - Final review and approval of all planning documents
+
+#### Implementation Phase
+- **`/start_implementation`** - Begin actual implementation after planning approval
+
+#### Utilities
+- **`/help`** - Show available slash commands and usage instructions
+- **`/workflow_status`** - Show current workflow state and next required actions
+
+### Workflow Sequence
+
+The LLM **MUST** follow this exact sequence:
+
+1. **Start with `/plan_project`** - Begin project planning with your idea
+2. **Use `/refine_requirements`** - Go through interactive requirement refinement
+3. **Call `/generate_specification`** - Create comprehensive specification documents
+4. **Execute `/plan_implementation`** - Generate detailed implementation plan
+5. **Run `/generate_tests`** - Create test specifications
+6. **Complete `/final_review`** - Get approval before implementation
+7. **Only then use `/start_implementation`** - Begin actual coding
+
+### Critical Rules for LLM
+
+🚨 **MANDATORY**: You MUST use slash commands in the exact order above
+🚨 **MANDATORY**: You MUST get user approval at each stage before proceeding
+🚨 **MANDATORY**: You MUST NOT start implementation until `/final_review` is completed
+🚨 **MANDATORY**: You MUST NOT create files or code until `/start_implementation` is called
+
+### Example Workflow
+
+```
+User: I want to build a task management app with voice input.
+
+LLM: Let me help you plan this project using the structured planning workflow.
+
+[LLM calls /plan_project with the user's idea]
+
+LLM: I'll help you plan this task management app with voice input. Let me start by understanding your requirements better.
+
+[LLM calls /refine_requirements to gather more details through interactive questioning]
+
+LLM: Based on our discussion, I've refined your requirements. Would you like me to proceed with generating the comprehensive specification documents?
+
+User: Yes, please proceed.
+
+[LLM calls /generate_specification to create the planning documents]
+
+LLM: I've created comprehensive specification documents in the `.spec` folder. Please review them and let me know if you'd like me to proceed with the implementation plan.
+
+[After user approval, LLM continues through the workflow...]
+```
+
 ## Usage
 
-### New Project
+### Slash Commands Approach (Recommended)
+
+When using the `kat-planner-slash` server, simply provide your project idea and the LLM will guide you through the structured workflow using slash commands:
+
 ```
 I want to build a task management app with voice input. Please use kat-planner MCP to plan this new project out.
 ```
 
-### Enhance Existing Project
+The LLM will automatically:
+1. Use `/plan_project` to start the workflow
+2. Use `/refine_requirements` to ask clarifying questions
+3. Wait for your approval before proceeding to `/generate_specification`
+4. Continue through the complete planning sequence
+
+### Traditional Approach
+
+For the original server (without slash commands):
+
+#### New Project
+```
+I want to build a task management app with voice input. Please use kat-planner MCP to plan this new project out.
+```
+
+#### Enhance Existing Project
 ```
 I need to add real-time collaboration to this app. Please use kat-planner MCP to plan out the steps.
 ```
 
-### Bug Fix Planning
+#### Bug Fix Planning
 ```
 There's an issue with user authentication timing out. Please use kat-planner MCP to plan the fix.
 ```
@@ -277,6 +402,19 @@ Creates test specifications based on your requirements and design documents.
 
 ```bash
 npm test
+```
+
+### Testing Slash Commands
+
+To test the slash commands implementation:
+
+```bash
+# Test slash commands functionality
+node test-slash-commands.mjs
+
+# Build and test slash commands server
+npm run build
+node dist/server-slash.js
 ```
 
 ### Development Mode
