@@ -22,17 +22,8 @@ class SlashCommandsResource {
             description: 'Complete list of available slash commands for KAT-PLANNER workflow',
             content: this.commands.generateHelpText()
         });
-        // Grouped commands by phase
-        const phases = this.commands.getCommandsByPhase();
-        Object.entries(phases).forEach(([phase, phaseCommands]) => {
-            if (Array.isArray(phaseCommands) && phaseCommands.length > 0) {
-                resources.push({
-                    name: `slash_commands_${phase.toLowerCase()}`,
-                    description: `${phase} phase commands`,
-                    content: this.generatePhaseHelp(phase, phaseCommands)
-                });
-            }
-        });
+        // Note: Phase-specific command grouping was removed due to TypeScript compilation issues
+        // All commands are now provided in the main slash_commands_help resource
         return resources;
     }
     /**

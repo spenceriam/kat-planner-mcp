@@ -4,6 +4,7 @@
  */
 export declare class KatPlannerSlashServer {
     private server;
+    constructor();
     /**
      * Register MCP resources including slash commands
      */

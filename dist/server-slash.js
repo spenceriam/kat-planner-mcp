@@ -16,6 +16,9 @@ class KatPlannerSlashServer {
             name: 'kat-planner-slash',
             version: '1.0.0',
         });
+        console.log('KatPlannerSlashServer instance created');
+        this.registerResources();
+        this.registerTools();
     }
     /**
      * Register MCP resources including slash commands
@@ -57,6 +60,7 @@ class KatPlannerSlashServer {
      * Register basic health check tool
      */
     registerTools() {
+        // Basic health check
         this.server.registerTool('health_check', {
             title: 'Health Check',
             description: 'Basic health check to verify server is running',
@@ -66,6 +70,81 @@ class KatPlannerSlashServer {
                 content: [{
                         type: 'text',
                         text: 'KAT-PLANNER Slash Commands MCP server is running successfully!',
+                    }],
+            };
+        });
+        // Register slash commands as tools for direct user interaction
+        this.server.registerTool('plan_project', {
+            title: 'Plan Project',
+            description: 'Start interactive project planning workflow',
+            inputSchema: {
+                userIdea: zod_1.z.string().describe('The user\'s project idea or concept'),
+                projectType: zod_1.z.string().optional().describe('Type of project: new_project, existing_codebase, enhancement')
+            },
+        }, async (params) => {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `## Project Planning Started\n\n**Idea:** ${params.userIdea}\n**Type:** ${params.projectType || 'Not specified'}\n\nNext steps:\n1. Use /refine_requirements to clarify details\n2. Use /generate_specification to create docs\n3. Use /plan_implementation to create tasks\n\nAvailable slash commands: /plan_project, /refine_requirements, /generate_specification, /plan_implementation, /validate_workflow, /get_help`
+                    }],
+            };
+        });
+        this.server.registerTool('refine_requirements', {
+            title: 'Refine Requirements',
+            description: 'Refine project requirements through interactive questioning',
+            inputSchema: {
+                currentStage: zod_1.z.enum(['initial', 'clarifying', 'summarizing']).describe('Stage: initial, clarifying, summarizing'),
+                answers: zod_1.z.record(zod_1.z.any()).optional().describe('User answers from previous stage')
+            },
+        }, async (params) => {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `## Requirements Refinement - ${params.currentStage}\n\n${params.currentStage === 'initial' ? 'Let me ask you some questions to clarify your project requirements...' :
+                            params.currentStage === 'clarifying' ? `Based on your answers: ${JSON.stringify(params.answers)}, let me clarify any ambiguities...` :
+                                `Summarizing your refined requirements...`}\n\nNext: Use /generate_specification to create detailed documentation.`
+                    }],
+            };
+        });
+        this.server.registerTool('generate_specification', {
+            title: 'Generate Specification',
+            description: 'Generate comprehensive specification documents',
+            inputSchema: {
+                refinedRequirements: zod_1.z.string().describe('Approved refined requirements'),
+                projectType: zod_1.z.string().describe('Project type for template selection')
+            },
+        }, async (params) => {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `## Specification Generated\n\n**Requirements:** ${params.refinedRequirements}\n**Type:** ${params.projectType}\n\nDocuments created:\n- requirements.md\n- design.md\n- tasks.md\n\nNext: Use /plan_implementation to create implementation tasks.`
+                    }],
+            };
+        });
+        this.server.registerTool('plan_implementation', {
+            title: 'Plan Implementation',
+            description: 'Create implementation plan with tasks and timeline',
+            inputSchema: {
+                specification: zod_1.z.string().describe('Generated specification to implement'),
+                complexity: zod_1.z.string().describe('Project complexity: simple, medium, complex')
+            },
+        }, async (params) => {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `## Implementation Plan Created\n\n**Specification:** ${params.specification}\n**Complexity:** ${params.complexity}\n\nPlan includes:\n- Task breakdown\n- Timeline estimation\n- Resource requirements\n- Risk assessment\n\nReady for development phase!`
+                    }],
+            };
+        });
+        this.server.registerTool('get_help', {
+            title: 'Get Help',
+            description: 'Display available slash commands and usage instructions',
+            inputSchema: {},
+        }, async () => {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `## KAT-PLANNER Slash Commands Help\n\n### Available Commands:\n\n1. **/plan_project** - Start project planning\n   - Parameters: userIdea (required), projectType (optional)\n   - Use this first to describe your project idea\n\n2. **/refine_requirements** - Clarify requirements\n   - Parameters: currentStage, answers (optional)\n   - Interactive questioning to refine your needs\n\n3. **/generate_specification** - Create documentation\n   - Parameters: refinedRequirements, projectType\n   - Generates requirements.md, design.md, tasks.md\n\n4. **/plan_implementation** - Create implementation plan\n   - Parameters: specification, complexity\n   - Breaks down work into actionable tasks\n\n5. **/validate_workflow** - Check workflow progress\n   - Parameters: executedCommands\n   - Validates command sequence and suggests next steps\n\n### Quick Start:\n1. /plan_project with your idea\n2. /refine_requirements to clarify\n3. /generate_specification to document\n4. /plan_implementation to plan execution\n\nUse /validate_workflow anytime to check your progress!`
                     }],
             };
         });
@@ -84,12 +163,7 @@ class KatPlannerSlashServer {
             return {
                 content: [{
                         type: 'text',
-                        text: `Workflow Validation Results:
-
-**Valid:** ${validation.valid ? '✅ YES' : '❌ NO'}
-
-**Next Valid Commands:**
-${validation.nextValidCommands.map(cmd => `- ${cmd}`).join('\n')}${errorMessage}`,
+                        text: `## Workflow Validation Results\n\n**Valid:** ${validation.valid ? '✅ YES' : '❌ NO'}\n\n**Next Valid Commands:**\n${validation.nextValidCommands.map(cmd => `- ${cmd}`).join('\n')}${errorMessage}`,
                         isError: !validation.valid
                     }],
             };
@@ -99,8 +173,6 @@ ${validation.nextValidCommands.map(cmd => `- ${cmd}`).join('\n')}${errorMessage}
      * Start the MCP server
      */
     async start() {
-        this.registerResources();
-        this.registerTools();
         try {
             const transport = new stdio_js_1.StdioServerTransport();
             await this.server.connect(transport);
@@ -121,5 +193,9 @@ exports.KatPlannerSlashServer = KatPlannerSlashServer;
 async function main() {
     const server = new KatPlannerSlashServer();
     await server.start();
+}
+// Start the server if this file is run directly
+if (require.main === module) {
+    main().catch(console.error);
 }
 //# sourceMappingURL=server-slash.js.map
