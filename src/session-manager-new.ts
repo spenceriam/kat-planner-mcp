@@ -7,27 +7,11 @@ import * as os from 'os';
  */
 interface Session {
   sessionId: string;
-  state: "questioning" | "refining" | "document_review" | "final_approval" | "development";
+  state: "questioning" | "refining" | "approved";
   userIdea: string;
   createdAt: number;
   lastActivity: number;
   answers?: Record<string, string>;
-  refinedSpecification?: string;
-  generatedDocuments?: Array<{ title: string; content: string }>;
-  approvalStatus?: {
-    requirements: boolean;
-    design: boolean;
-    tasks: boolean;
-    agents: boolean;
-    overall: boolean;
-  };
-  developmentPlan?: {
-    implementationSteps: string[];
-    milestones: string[];
-    estimatedTimeline: string;
-  };
-  codebaseType?: "new_project" | "existing_with_docs" | "existing_without_docs";
-  projectType?: string;
 }
 
 /**
@@ -39,7 +23,6 @@ export class ProductionSessionManager {
   private readonly CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_SESSIONS = 1000; // Prevent memory bloat
   private readonly SESSION_FILE = path.join(os.homedir(), '.kat-planner-sessions.json');
-  private initialized = false;
 
   constructor() {
     this.initialize();
@@ -51,27 +34,15 @@ export class ProductionSessionManager {
   private async initialize(): Promise<void> {
     await this.loadFromDisk();
     this.startCleanupTimer();
-    this.initialized = true;
     this.logSessionEvent('session_manager_initialized', 'system', {
       loadedSessions: this.sessions.size
     });
   }
 
   /**
-   * Wait for session manager to be initialized
-   */
-  private async waitForInitialization(): Promise<void> {
-    while (!this.initialized) {
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-  }
-
-  /**
    * Create new session with size limit enforcement
    */
   async createSession(userIdea: string): Promise<string | null> {
-    await this.waitForInitialization();
-
     // Check size limit
     if (this.sessions.size >= this.MAX_SESSIONS) {
       this.logSessionEvent('session_limit_reached', 'system', {
@@ -107,28 +78,25 @@ export class ProductionSessionManager {
   /**
    * Get session with activity update
    */
-  getSession(sessionId: string): Promise<Session | undefined> {
-    return this.waitForInitialization().then(() => {
-      const session = this.sessions.get(sessionId);
-      if (!session) {
-        this.logSessionEvent('session_not_found', sessionId);
-        return undefined;
-      }
+  getSession(sessionId: string): Session | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      this.logSessionEvent('session_not_found', sessionId);
+      return undefined;
+    }
 
-      // Update activity
-      session.lastActivity = Date.now();
-      this.saveToDisk(); // Async save
+    // Update activity
+    session.lastActivity = Date.now();
+    this.saveToDisk(); // Async save
 
-      this.logSessionEvent('session_accessed', sessionId, { state: session.state });
-      return session;
-    });
+    this.logSessionEvent('session_accessed', sessionId, { state: session.state });
+    return session;
   }
 
   /**
    * Update session with validation and state transition enforcement
    */
   async updateSession(sessionId: string, updates: Partial<Session>): Promise<boolean> {
-    await this.waitForInitialization();
     const session = this.sessions.get(sessionId);
     if (!session) {
       this.logSessionEvent('session_update_failed', sessionId, {
@@ -165,9 +133,8 @@ export class ProductionSessionManager {
   private canTransition(from: string, to: string): boolean {
     const validTransitions: Record<string, string[]> = {
       "questioning": ["refining"],
-      "refining": ["document_review"],
-      "document_review": ["refining", "final_approval"], // Allow revisions
-      "final_approval": ["development"]
+      "refining": ["approved"],
+      "approved": []
     };
 
     const allowedTransitions = validTransitions[from] || [];
@@ -243,18 +210,18 @@ export class ProductionSessionManager {
   }
 
   /**
-   * Atomic file write with direct approach
+   * Atomic file write with temp file → rename pattern
    */
   private async saveToDisk(): Promise<void> {
     try {
-      // Ensure the directory exists
-      const sessionDir = path.dirname(this.SESSION_FILE);
-      await fs.mkdir(sessionDir, { recursive: true });
-
+      const tempFile = this.SESSION_FILE + '.tmp';
       const data = JSON.stringify(Array.from(this.sessions.entries()), null, 2);
 
-      // Direct write (simpler approach for now)
-      await fs.writeFile(this.SESSION_FILE, data);
+      // Write to temp file first
+      await fs.writeFile(tempFile, data);
+
+      // Atomic rename (prevents corruption if server crashes mid-write)
+      await fs.rename(tempFile, this.SESSION_FILE);
 
       this.logSessionEvent('sessions_saved', 'system', {
         sessionCount: this.sessions.size
@@ -347,6 +314,7 @@ export class ProductionSessionManager {
         });
         console.error('Failed to load sessions, starting fresh:', err);
       }
+      this.sessions = new Map();
     }
   }
 
@@ -356,22 +324,11 @@ export class ProductionSessionManager {
   private isValidSession(session: any): session is Session {
     return session &&
            typeof session.sessionId === 'string' &&
-           ['questioning', 'refining', 'document_review', 'final_approval', 'development'].includes(session.state) &&
+           ['questioning', 'refining', 'approved'].includes(session.state) &&
            typeof session.userIdea === 'string' &&
            typeof session.createdAt === 'number' &&
            typeof session.lastActivity === 'number' &&
-           (session.answers === undefined || typeof session.answers === 'object') &&
-           (session.refinedSpecification === undefined || typeof session.refinedSpecification === 'string') &&
-           (session.generatedDocuments === undefined || Array.isArray(session.generatedDocuments)) &&
-           (session.approvalStatus === undefined || (
-             typeof session.approvalStatus === 'object' &&
-             typeof session.approvalStatus.requirements === 'boolean' &&
-             typeof session.approvalStatus.design === 'boolean' &&
-             typeof session.approvalStatus.tasks === 'boolean' &&
-             typeof session.approvalStatus.agents === 'boolean' &&
-             typeof session.approvalStatus.overall === 'boolean'
-           )) &&
-           (session.codebaseType === undefined || ['new_project', 'existing_with_docs', 'existing_without_docs'].includes(session.codebaseType));
+           (session.answers === undefined || typeof session.answers === 'object');
   }
 
   /**

@@ -47,7 +47,6 @@ class ProductionSessionManager {
         this.CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
         this.MAX_SESSIONS = 1000; // Prevent memory bloat
         this.SESSION_FILE = path.join(os.homedir(), '.kat-planner-sessions.json');
-        this.initialized = false;
         this.initialize();
     }
     /**
@@ -56,24 +55,14 @@ class ProductionSessionManager {
     async initialize() {
         await this.loadFromDisk();
         this.startCleanupTimer();
-        this.initialized = true;
         this.logSessionEvent('session_manager_initialized', 'system', {
             loadedSessions: this.sessions.size
         });
     }
     /**
-     * Wait for session manager to be initialized
-     */
-    async waitForInitialization() {
-        while (!this.initialized) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-        }
-    }
-    /**
      * Create new session with size limit enforcement
      */
     async createSession(userIdea) {
-        await this.waitForInitialization();
         // Check size limit
         if (this.sessions.size >= this.MAX_SESSIONS) {
             this.logSessionEvent('session_limit_reached', 'system', {
@@ -105,24 +94,21 @@ class ProductionSessionManager {
      * Get session with activity update
      */
     getSession(sessionId) {
-        return this.waitForInitialization().then(() => {
-            const session = this.sessions.get(sessionId);
-            if (!session) {
-                this.logSessionEvent('session_not_found', sessionId);
-                return undefined;
-            }
-            // Update activity
-            session.lastActivity = Date.now();
-            this.saveToDisk(); // Async save
-            this.logSessionEvent('session_accessed', sessionId, { state: session.state });
-            return session;
-        });
+        const session = this.sessions.get(sessionId);
+        if (!session) {
+            this.logSessionEvent('session_not_found', sessionId);
+            return undefined;
+        }
+        // Update activity
+        session.lastActivity = Date.now();
+        this.saveToDisk(); // Async save
+        this.logSessionEvent('session_accessed', sessionId, { state: session.state });
+        return session;
     }
     /**
      * Update session with validation and state transition enforcement
      */
     async updateSession(sessionId, updates) {
-        await this.waitForInitialization();
         const session = this.sessions.get(sessionId);
         if (!session) {
             this.logSessionEvent('session_update_failed', sessionId, {
@@ -153,9 +139,8 @@ class ProductionSessionManager {
     canTransition(from, to) {
         const validTransitions = {
             "questioning": ["refining"],
-            "refining": ["document_review"],
-            "document_review": ["refining", "final_approval"], // Allow revisions
-            "final_approval": ["development"]
+            "refining": ["approved"],
+            "approved": []
         };
         const allowedTransitions = validTransitions[from] || [];
         return allowedTransitions.includes(to);
@@ -219,16 +204,16 @@ class ProductionSessionManager {
         }, this.CLEANUP_INTERVAL);
     }
     /**
-     * Atomic file write with direct approach
+     * Atomic file write with temp file → rename pattern
      */
     async saveToDisk() {
         try {
-            // Ensure the directory exists
-            const sessionDir = path.dirname(this.SESSION_FILE);
-            await fs.mkdir(sessionDir, { recursive: true });
+            const tempFile = this.SESSION_FILE + '.tmp';
             const data = JSON.stringify(Array.from(this.sessions.entries()), null, 2);
-            // Direct write (simpler approach for now)
-            await fs.writeFile(this.SESSION_FILE, data);
+            // Write to temp file first
+            await fs.writeFile(tempFile, data);
+            // Atomic rename (prevents corruption if server crashes mid-write)
+            await fs.rename(tempFile, this.SESSION_FILE);
             this.logSessionEvent('sessions_saved', 'system', {
                 sessionCount: this.sessions.size
             });
@@ -316,6 +301,7 @@ class ProductionSessionManager {
                 });
                 console.error('Failed to load sessions, starting fresh:', err);
             }
+            this.sessions = new Map();
         }
     }
     /**
@@ -324,20 +310,11 @@ class ProductionSessionManager {
     isValidSession(session) {
         return session &&
             typeof session.sessionId === 'string' &&
-            ['questioning', 'refining', 'document_review', 'final_approval', 'development'].includes(session.state) &&
+            ['questioning', 'refining', 'approved'].includes(session.state) &&
             typeof session.userIdea === 'string' &&
             typeof session.createdAt === 'number' &&
             typeof session.lastActivity === 'number' &&
-            (session.answers === undefined || typeof session.answers === 'object') &&
-            (session.refinedSpecification === undefined || typeof session.refinedSpecification === 'string') &&
-            (session.generatedDocuments === undefined || Array.isArray(session.generatedDocuments)) &&
-            (session.approvalStatus === undefined || (typeof session.approvalStatus === 'object' &&
-                typeof session.approvalStatus.requirements === 'boolean' &&
-                typeof session.approvalStatus.design === 'boolean' &&
-                typeof session.approvalStatus.tasks === 'boolean' &&
-                typeof session.approvalStatus.agents === 'boolean' &&
-                typeof session.approvalStatus.overall === 'boolean')) &&
-            (session.codebaseType === undefined || ['new_project', 'existing_with_docs', 'existing_without_docs'].includes(session.codebaseType));
+            (session.answers === undefined || typeof session.answers === 'object');
     }
     /**
      * Generate unique session ID
@@ -371,4 +348,4 @@ class ProductionSessionManager {
     }
 }
 exports.ProductionSessionManager = ProductionSessionManager;
-//# sourceMappingURL=session-manager.js.map
+//# sourceMappingURL=session-manager-new.js.map
