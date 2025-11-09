@@ -13,6 +13,7 @@ A Model Context Protocol (MCP) server that automates spec-driven development wor
 2. **Stateful Refinement Tool**: Interactive idea refinement with sequential workflow enforcement
 3. **Validated SDD Generator**: Creates spec-driven development documents with approval requirements
 4. **Permission-based Testing Tool**: Generates test specifications only with explicit user consent
+5. **Slash Commands System**: Structured command-driven workflow with MCP resource-based guidance
 
 ## Integration Points
 - Claude Code, Cursor, Windsurf, or any MCP-compatible tool
@@ -32,8 +33,12 @@ project-root/
 ├── integration-test.mjs (stateful workflow testing)
 ├── workflow-test.mjs (workflow enforcement testing)
 ├── stateful-workflow-test.mjs (state management testing)
+├── test-slash-commands.mjs (slash commands testing)
 └── src/
     ├── server.ts (main MCP server implementation)
+    ├── server-slash.ts (slash commands MCP server implementation)
+    ├── slash-commands.ts (slash commands definitions and validation)
+    ├── slash-commands-resource.ts (MCP resources for slash commands)
     ├── tools/
     │   ├── refinement.ts (refinement logic module)
     │   └── sdd-generator.ts (document generation module)
@@ -108,6 +113,9 @@ node stateful-workflow-test.mjs
 
 # Test workflow enforcement
 node workflow-test.mjs
+
+# Test slash commands implementation
+node test-slash-commands.mjs
 ```
 
 ## Technical Notes
@@ -117,4 +125,7 @@ node workflow-test.mjs
 - **Stateful workflow management prevents out-of-sequence tool calls**
 - **Sequential validation enforces proper user interaction between stages**
 - **Approval requirements ensure user consent before proceeding**
+- **Slash commands system provides structured workflow guidance through MCP resources**
+- **Command sequence validation prevents LLM from jumping ahead in workflow**
+- **MCP resource-based approach guides LLM behavior without forcing through tools**
 - Ready for AI integration with comprehensive workflow enforcement
