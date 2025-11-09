@@ -21,10 +21,6 @@ export declare class SlashCommands {
      */
     getCommand(commandName: string): SlashCommand | undefined;
     /**
-     * Get commands grouped by workflow phase
-     */
-    getCommandsByPhase(): Record<string, SlashCommand[]>;
-    /**
      * Generate help text for LLM
      */
     generateHelpText(): string;

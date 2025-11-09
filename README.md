@@ -254,6 +254,10 @@ Restart your MCP-compatible development tool to load the server configuration.
 
 The slash commands system provides structured workflow guidance. When using the `kat-planner-slash` server, the LLM will have access to MCP resources that guide it through the proper planning sequence.
 
+### How to Use Slash Commands
+
+**IMPORTANT**: The slash commands are NOT for you (the user) to type directly. They are for the LLM to call internally as part of the structured workflow. You simply provide your project idea, and the LLM will automatically use the appropriate slash commands in the correct sequence.
+
 ### Available Slash Commands
 
 #### Planning Phase
@@ -305,45 +309,116 @@ The LLM **MUST** follow this exact sequence:
 🚨 **MANDATORY**: You MUST NOT start implementation until `/final_review` is completed
 🚨 **MANDATORY**: You MUST NOT create files or code until `/start_implementation` is called
 
-### Example Workflow
+### Complete User Examples
+
+#### Example 1: New Project
+
+**What you should type in your MCP-compatible tool:**
 
 ```
-User: I want to build a task management app with voice input.
-
-LLM: Let me help you plan this project using the structured planning workflow.
-
-[LLM calls /plan_project with the user's idea]
-
-LLM: I'll help you plan this task management app with voice input. Let me start by understanding your requirements better.
-
-[LLM calls /refine_requirements to gather more details through interactive questioning]
-
-LLM: Based on our discussion, I've refined your requirements. Would you like me to proceed with generating the comprehensive specification documents?
-
-User: Yes, please proceed.
-
-[LLM calls /generate_specification to create the planning documents]
-
-LLM: I've created comprehensive specification documents in the `.spec` folder. Please review them and let me know if you'd like me to proceed with the implementation plan.
-
-[After user approval, LLM continues through the workflow...]
+I want to build a task management app with voice input. The app should help users create tasks using voice commands, organize them by priority, and provide daily summaries. Please use the kat-planner MCP to plan this new project out.
 ```
+
+**What happens automatically:**
+1. LLM calls `/plan_project` with your idea
+2. LLM calls `/refine_requirements` to ask clarifying questions
+3. LLM waits for your answers before proceeding
+4. LLM calls `/generate_specification` after approval
+5. LLM continues through the complete workflow
+
+#### Example 2: Existing Project Enhancement
+
+**What you should type in your MCP-compatible tool:**
+
+```
+I have an existing task management app (see the codebase) and I want to add real-time collaboration features. Users should be able to share task lists, see real-time updates when collaborators make changes, and chat within the app. Please use the kat-planner MCP to plan this enhancement.
+```
+
+**What happens automatically:**
+1. LLM calls `/plan_project` with your enhancement idea
+2. LLM calls `/analyze_project` to examine existing codebase
+3. LLM calls `/refine_requirements` to clarify enhancement details
+4. LLM waits for your approval before proceeding
+5. LLM calls `/enhance_specification` to update existing documents
+6. LLM continues through the appropriate workflow
+
+#### Example 3: Bug Fix Planning
+
+**What you should type in your MCP-compatible tool:**
+
+```
+I'm working on a web application and there's a critical bug where user authentication times out after 5 minutes of inactivity, but it should stay active for at least 30 minutes. The app is built with React frontend and Node.js backend. Please use the kat-planner MCP to plan how to fix this bug.
+```
+
+**What happens automatically:**
+1. LLM calls `/plan_project` with your bug fix request
+2. LLM calls `/analyze_project` to examine the existing codebase structure
+3. LLM calls `/refine_requirements` to understand the authentication system
+4. LLM waits for your input before proceeding
+5. LLM calls `/generate_specification` to create a detailed bug fix plan
+
+### What NOT to Do
+
+❌ **DO NOT** type slash commands directly:
+```
+/plan_project I want to build an app
+```
+
+❌ **DO NOT** try to skip steps in the workflow:
+```
+Please generate the specification documents for my new app idea
+```
+
+❌ **DO NOT** ask for implementation before planning:
+```
+Please start implementing a task management app for me
+```
+
+### Proper Context Examples
+
+#### Good: Providing Context Before Planning
+```
+I'm working on a personal project to build a habit tracking app. I have some initial ideas but need help planning it properly. The app should help users track daily habits, provide streaks and reminders, and show progress over time. I'm thinking of using React Native for mobile development. Please use the kat-planner MCP to help me plan this project systematically.
+```
+
+#### Good: Referencing Existing Code
+```
+Looking at this existing codebase, I can see we have a basic note-taking app built with Vue.js and Firebase. I want to enhance it by adding collaborative features, markdown support, and offline functionality. The current app allows users to create and save notes, but lacks advanced features. Please use the kat-planner MCP to plan these enhancements.
+```
+
+#### Good: Clear Problem Statement
+```
+I'm facing a performance issue with my e-commerce website. The product listing page takes 8+ seconds to load when there are more than 100 products, which is causing users to leave the site. The backend is built with Python/Django and uses PostgreSQL. Please use the kat-planner MCP to plan how to optimize this performance issue.
+```
+
+### Where to Use This
+
+**In your MCP-compatible development tool (Claude Code, Claude Desktop, Cursor, etc.):**
+
+1. **Start a new conversation** or **open an existing project**
+2. **Provide your project idea with context** (like the examples above)
+3. **The LLM will automatically use the appropriate slash commands** in the correct sequence
+4. **You will be prompted for input at each interactive stage**
+5. **You provide approval to proceed to the next stage**
+
+**The slash commands are completely transparent to you** - you just provide your project idea and the LLM handles the rest automatically through the structured workflow.
 
 ## Usage
 
 ### Slash Commands Approach (Recommended)
 
-When using the `kat-planner-slash` server, simply provide your project idea and the LLM will guide you through the structured workflow using slash commands:
+**For Users**: Simply provide your project idea with context, and the LLM will automatically use the appropriate slash commands:
 
 ```
-I want to build a task management app with voice input. Please use kat-planner MCP to plan this new project out.
+I want to build a task management app with voice input. The app should help users create tasks using voice commands, organize them by priority, and provide daily summaries. Please use the kat-planner MCP to plan this new project out.
 ```
 
-The LLM will automatically:
-1. Use `/plan_project` to start the workflow
-2. Use `/refine_requirements` to ask clarifying questions
-3. Wait for your approval before proceeding to `/generate_specification`
-4. Continue through the complete planning sequence
+**What the LLM does automatically:**
+1. Uses `/plan_project` to start the workflow
+2. Uses `/refine_requirements` to ask clarifying questions
+3. Waits for your approval before proceeding to `/generate_specification`
+4. Continues through the complete planning sequence
+5. Only uses `/start_implementation` after all planning is approved
 
 ### Traditional Approach
 

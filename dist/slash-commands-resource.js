@@ -25,7 +25,7 @@ class SlashCommandsResource {
         // Grouped commands by phase
         const phases = this.commands.getCommandsByPhase();
         Object.entries(phases).forEach(([phase, phaseCommands]) => {
-            if (phaseCommands.length > 0) {
+            if (Array.isArray(phaseCommands) && phaseCommands.length > 0) {
                 resources.push({
                     name: `slash_commands_${phase.toLowerCase()}`,
                     description: `${phase} phase commands`,

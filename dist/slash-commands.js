@@ -138,86 +138,139 @@ class SlashCommands {
         return this.commands.get(commandName);
     }
     /**
-     * Get commands grouped by workflow phase
-     */
-    getCommandsByPhase() {
-        const phases = {
-            'Planning': [],
-            'Specification': [],
-            'Planning_Phase2': [],
-            'Quality_Assurance': [],
-            'Documentation': [],
-            'Review': [],
-            'Implementation': [],
-            'Utilities': []
-        };
-        // Populate phases safely
-        const planProject = this.commands.get('/plan_project');
-        if (planProject)
-            phases['Planning'].push(planProject);
-        const refineRequirements = this.commands.get('/refine_requirements');
-        if (refineRequirements)
-            phases['Planning'].push(refineRequirements);
-        const analyzeProject = this.commands.get('/analyze_project');
-        if (analyzeProject)
-            phases['Planning'].push(analyzeProject);
-        const generateSpecification = this.commands.get('/generate_specification');
-        if (generateSpecification)
-            phases['Specification'].push(generateSpecification);
-        const enhanceSpecification = this.commands.get('/enhance_specification');
-        if (enhanceSpecification)
-            phases['Specification'].push(enhanceSpecification);
-        const planImplementation = this.commands.get('/plan_implementation');
-        if (planImplementation)
-            phases['Planning_Phase2'].push(planImplementation);
-        const planEnhancement = this.commands.get('/plan_enhancement');
-        if (planEnhancement)
-            phases['Planning_Phase2'].push(planEnhancement);
-        const generateTests = this.commands.get('/generate_tests');
-        if (generateTests)
-            phases['Quality_Assurance'].push(generateTests);
-        const generateEnhancementTests = this.commands.get('/generate_enhancement_tests');
-        if (generateEnhancementTests)
-            phases['Quality_Assurance'].push(generateEnhancementTests);
-        const createDocumentation = this.commands.get('/create_documentation');
-        if (createDocumentation)
-            phases['Documentation'].push(createDocumentation);
-        const finalReview = this.commands.get('/final_review');
-        if (finalReview)
-            phases['Review'].push(finalReview);
-        const startImplementation = this.commands.get('/start_implementation');
-        if (startImplementation)
-            phases['Implementation'].push(startImplementation);
-        const help = this.commands.get('/help');
-        if (help)
-            phases['Utilities'].push(help);
-        const workflowStatus = this.commands.get('/workflow_status');
-        if (workflowStatus)
-            phases['Utilities'].push(workflowStatus);
-        return phases;
-    }
-    /**
      * Generate help text for LLM
      */
     generateHelpText() {
-        const phases = this.getCommandsByPhase();
+        const allCommands = this.getCommands();
+        // Group commands by phase
+        const planningPhase = allCommands.filter(cmd => cmd.command === '/plan_project' ||
+            cmd.command === '/refine_requirements' ||
+            cmd.command === '/analyze_project');
+        const specificationPhase = allCommands.filter(cmd => cmd.command === '/generate_specification' ||
+            cmd.command === '/enhance_specification');
+        const implementationPhase = allCommands.filter(cmd => cmd.command === '/plan_implementation' ||
+            cmd.command === '/plan_enhancement');
+        const qualityPhase = allCommands.filter(cmd => cmd.command === '/generate_tests' ||
+            cmd.command === '/generate_enhancement_tests');
+        const documentationPhase = allCommands.filter(cmd => cmd.command === '/create_documentation');
+        const reviewPhase = allCommands.filter(cmd => cmd.command === '/final_review');
+        const implementationStartPhase = allCommands.filter(cmd => cmd.command === '/start_implementation');
+        const utilityPhase = allCommands.filter(cmd => cmd.command === '/help' ||
+            cmd.command === '/workflow_status');
         let helpText = '# KAT-PLANNER MCP Slash Commands\n\n';
-        Object.entries(phases).forEach(([phase, commands]) => {
-            if (commands.length > 0) {
-                helpText += `## ${phase.replace('_', ' ')}\n\n`;
-                commands.forEach(command => {
-                    helpText += `**${command.command}**\n`;
-                    helpText += `${command.description}\n`;
-                    if (Object.keys(command.parameters || {}).length > 0) {
-                        helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
-                    }
-                    if (command.nextSteps && command.nextSteps.length > 0) {
-                        helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
-                    }
-                    helpText += '\n';
-                });
-            }
-        });
+        // Add each phase section
+        if (planningPhase.length > 0) {
+            helpText += '## Planning Phase\n\n';
+            planningPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (specificationPhase.length > 0) {
+            helpText += '## Specification Phase\n\n';
+            specificationPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (implementationPhase.length > 0) {
+            helpText += '## Implementation Planning Phase\n\n';
+            implementationPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (qualityPhase.length > 0) {
+            helpText += '## Quality Assurance Phase\n\n';
+            qualityPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (documentationPhase.length > 0) {
+            helpText += '## Documentation Phase\n\n';
+            documentationPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (reviewPhase.length > 0) {
+            helpText += '## Review Phase\n\n';
+            reviewPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (implementationStartPhase.length > 0) {
+            helpText += '## Implementation Phase\n\n';
+            implementationStartPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
+        if (utilityPhase.length > 0) {
+            helpText += '## Utilities\n\n';
+            utilityPhase.forEach(command => {
+                helpText += `**${command.command}**\n`;
+                helpText += `${command.description}\n`;
+                if (Object.keys(command.parameters || {}).length > 0) {
+                    helpText += `Parameters: ${JSON.stringify(command.parameters)}\n`;
+                }
+                if (command.nextSteps && command.nextSteps.length > 0) {
+                    helpText += `Next Steps: ${command.nextSteps.join(', ')}\n`;
+                }
+                helpText += '\n';
+            });
+        }
         return helpText;
     }
     /**

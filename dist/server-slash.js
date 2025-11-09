@@ -4,6 +4,7 @@ exports.KatPlannerSlashServer = void 0;
 exports.main = main;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
+const zod_1 = require("zod");
 const slash_commands_resource_js_1 = require("./slash-commands-resource.js");
 /**
  * KAT-PLANNER MCP Server with Slash Commands
@@ -23,27 +24,31 @@ class KatPlannerSlashServer {
         // Register slash commands as resources
         const resources = slash_commands_resource_js_1.slashCommandsResource.getCommandsAsResources();
         resources.forEach(resource => {
-            this.server.registerResource(resource.name, {
+            this.server.registerResource(resource.name, `mcp://${resource.name}`, {
+                title: resource.name,
                 description: resource.description,
+                mimeType: 'text/markdown'
             }, async () => {
                 return {
                     contents: [{
+                            text: resource.content,
                             uri: `mcp://${resource.name}`,
                             mimeType: 'text/markdown',
-                            content: resource.content,
                         }],
                 };
             });
         });
         // Register workflow guidance resource
-        this.server.registerResource('workflow_guidance', {
+        this.server.registerResource('workflow_guidance', 'mcp://workflow_guidance', {
+            title: 'Workflow Guidance',
             description: 'Complete workflow guidance and instructions for LLM',
+            mimeType: 'text/markdown'
         }, async () => {
             return {
                 contents: [{
+                        text: slash_commands_resource_js_1.slashCommandsResource.getWorkflowGuidance(),
                         uri: 'mcp://workflow_guidance',
                         mimeType: 'text/markdown',
-                        content: slash_commands_resource_js_1.slashCommandsResource.getWorkflowGuidance(),
                     }],
             };
         });
@@ -69,11 +74,7 @@ class KatPlannerSlashServer {
             title: 'Validate Workflow Progress',
             description: 'Validate that workflow commands are being called in correct sequence',
             inputSchema: {
-                executedCommands: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'List of commands that have been executed so far'
-                }
+                executedCommands: zod_1.z.array(zod_1.z.string()).describe('List of commands that have been executed so far')
             },
         }, async (params) => {
             const validation = slash_commands_resource_js_1.slashCommandsResource.validateCommandSequence(params.executedCommands);

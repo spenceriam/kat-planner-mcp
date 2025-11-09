@@ -28,9 +28,9 @@ export class KatPlannerSlashServer {
       }, async () => {
         return {
           contents: [{
+            text: resource.content,
             uri: `mcp://${resource.name}`,
             mimeType: 'text/markdown',
-            content: resource.content,
           }],
         };
       });
@@ -44,9 +44,9 @@ export class KatPlannerSlashServer {
     }, async () => {
       return {
         contents: [{
+          text: slashCommandsResource.getWorkflowGuidance(),
           uri: 'mcp://workflow_guidance',
           mimeType: 'text/markdown',
-          content: slashCommandsResource.getWorkflowGuidance(),
         }],
       };
     });

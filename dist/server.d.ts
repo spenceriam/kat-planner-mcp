@@ -24,15 +24,13 @@ export declare class KatPlannerServer {
      */
     private registerTools;
     /**
-     * Handle mouse button mapping project refinement
-     */
-    private handleMouseButtonRefinement;
-    /**
-     * Handle generic project refinement for other project types
+     * Handle generic project refinement for all project types
+     * The LLM provides domain expertise while the MCP ensures proper workflow
      */
     private handleGenericRefinement;
     /**
-     * Generate comprehensive test specifications for a project type
+     * Generate comprehensive test specifications for any project type
+     * The LLM determines project-specific test requirements based on the refined specification
      */
     private generateTestSpecifications;
     /**
