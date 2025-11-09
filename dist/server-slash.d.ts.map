@@ -1,0 +1,1 @@
+{"version":3,"file":"server-slash.d.ts","sourceRoot":"","sources":["../src/server-slash.ts"],"names":[],"mappings":"AAIA;;;GAGG;AACH,qBAAa,qBAAqB;IAChC,OAAO,CAAC,MAAM,CAGX;IAEH;;OAEG;IACH,OAAO,CAAC,iBAAiB;IAgCzB;;OAEG;IACH,OAAO,CAAC,aAAa;IA+CrB;;OAEG;IACU,KAAK,IAAI,OAAO,CAAC,IAAI,CAAC;CAgBpC;AAED;;GAEG;AACH,wBAAsB,IAAI,IAAI,OAAO,CAAC,IAAI,CAAC,CAG1C"}
